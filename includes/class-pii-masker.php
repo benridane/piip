@@ -140,6 +140,9 @@ class PIIP_PII_Masker {
 			case 'token':
 				return $this->mask_token( $value );
 
+			case 'hosting':
+				return $this->mask_hosting_id( $value );
+
 			default:
 				return $value;
 		}
@@ -345,6 +348,86 @@ class PIIP_PII_Masker {
 	}
 
 	/**
+	 * Mask hosting account/server ID.
+	 *
+	 * Supports various hosting providers:
+	 * - Xserver: xs123456 -> xs***456, sv1234 -> sv***4
+	 * - Sakura: abc12345 -> abc***45, *.sakura.ne.jp -> ***.sakura.ne.jp
+	 * - AWS: 123456789012 -> ****-****-9012
+	 * - Azure GUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx -> ****-****-****-****-xxxx
+	 * - GCP: my-project-123 -> my-***-123
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value Hosting ID to mask.
+	 * @return string Masked hosting ID.
+	 */
+	public function mask_hosting_id( $value ) {
+		$length = strlen( $value );
+
+		// Xserver account: xs123456.
+		if ( preg_match( '/^xs\d{5,8}$/i', $value ) ) {
+			return substr( $value, 0, 2 ) . '***' . substr( $value, -3 );
+		}
+
+		// Xserver server: sv1234.
+		if ( preg_match( '/^sv\d{3,5}$/i', $value ) ) {
+			return substr( $value, 0, 2 ) . '***' . substr( $value, -1 );
+		}
+
+		// Sakura account: abc12345.
+		if ( preg_match( '/^[a-z]{3}\d{5}$/i', $value ) ) {
+			return substr( $value, 0, 3 ) . '***' . substr( $value, -2 );
+		}
+
+		// Sakura domain: example.sakura.ne.jp.
+		if ( preg_match( '/\.sakura\.ne\.jp$/i', $value ) ) {
+			return '***.sakura.ne.jp';
+		}
+
+		// Lolipop domain: example.lolipop.jp.
+		if ( preg_match( '/\.lolipop\.jp$/i', $value ) ) {
+			return '***.lolipop.jp';
+		}
+
+		// mixhost domain: example.mixh.jp.
+		if ( preg_match( '/\.mixh\.jp$/i', $value ) ) {
+			return '***.mixh.jp';
+		}
+
+		// ConoHa account: gnc123456789.
+		if ( preg_match( '/^gnc[a-z0-9]{8,12}$/i', $value ) ) {
+			return 'gnc***' . substr( $value, -4 );
+		}
+
+		// AWS 12-digit account.
+		if ( preg_match( '/^\d{12}$/', $value ) ) {
+			return '****-****-' . substr( $value, -4 );
+		}
+
+		// Azure GUID.
+		if ( preg_match( '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value ) ) {
+			$parts = explode( '-', $value );
+			return '****-****-****-****-' . $parts[4];
+		}
+
+		// GCP project ID: keep first and last parts.
+		if ( preg_match( '/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/', $value ) ) {
+			if ( $length > 10 ) {
+				return substr( $value, 0, 3 ) . '***' . substr( $value, -3 );
+			}
+			return substr( $value, 0, 2 ) . '***' . substr( $value, -2 );
+		}
+
+		// Generic fallback: show first 2 and last 2.
+		if ( $length > 6 ) {
+			return substr( $value, 0, 2 ) . '***' . substr( $value, -2 );
+		}
+
+		return '***';
+	}
+
+	/**
 	 * Check if value is already masked.
 	 *
 	 * @since 1.0.0
@@ -395,6 +478,11 @@ class PIIP_PII_Masker {
 
 		// Mask IP addresses.
 		$text = $this->mask_ip_addresses_in_text( $text );
+
+		// Mask hosting account/server IDs.
+		if ( $this->should_mask_type( 'hosting' ) ) {
+			$text = $this->mask_hosting_ids_in_text( $text );
+		}
 
 		return $text;
 	}
@@ -578,6 +666,46 @@ class PIIP_PII_Masker {
 		// Keep last 4 digits.
 		$last_four = substr( $digits, -4 );
 		return '****-****-' . $last_four;
+	}
+
+	/**
+	 * Mask hosting account/server IDs found in text.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with hosting IDs masked.
+	 */
+	private function mask_hosting_ids_in_text( $text ) {
+		// Hosting ID patterns (same as detector).
+		$patterns = array(
+			// Xserver: xs123456, sv1234.
+			'xserver_account' => '/\bxs\d{5,8}\b/i',
+			'xserver_server'  => '/\bsv\d{3,5}\b/i',
+			// Sakura: abc12345, *.sakura.ne.jp.
+			'sakura_account'  => '/\b[a-z]{3}\d{5}\b/i',
+			'sakura_domain'   => '/\b[\w-]+\.sakura\.ne\.jp\b/i',
+			// ConoHa: gnc*.
+			'conoha_account'  => '/\bgnc[a-z0-9]{8,12}\b/i',
+			// Lolipop: *.lolipop.jp.
+			'lolipop_domain'  => '/\b[\w-]+\.lolipop\.jp\b/i',
+			// mixhost: *.mixh.jp.
+			'mixhost_domain'  => '/\b[\w-]+\.mixh\.jp\b/i',
+			// Azure GUID.
+			'azure_guid'      => '/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i',
+		);
+
+		foreach ( $patterns as $name => $pattern ) {
+			$text = preg_replace_callback(
+				$pattern,
+				function ( $matches ) {
+					return $this->mask_hosting_id( $matches[0] );
+				},
+				$text
+			);
+		}
+
+		return $text;
 	}
 
 	/**

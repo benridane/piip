@@ -77,6 +77,11 @@ class PIIP_PII_Detector {
 			'url', 'website', 'homepage', 'site', 'link',
 			'URL', 'ホームページ', 'サイト',
 		),
+		'hosting'  => array(
+			'server', 'server_id', 'account_id', 'hosting', 'subscription',
+			'project_id', 'xserver', 'sakura', 'aws', 'azure', 'gcp',
+			'サーバー', 'サーバーID', 'アカウントID',
+		),
 	);
 
 	/**
@@ -190,6 +195,33 @@ class PIIP_PII_Detector {
 	private $url_pattern = '/\bhttps?:\/\/[^\s<>"\']+/i';
 
 	/**
+	 * Hosting account/server ID patterns.
+	 *
+	 * @since 1.0.0
+	 * @var array
+	 */
+	private $hosting_patterns = array(
+		// Xserver: xs123456, sv1234.
+		'xserver_account' => '/\bxs\d{5,8}\b/i',
+		'xserver_server'  => '/\bsv\d{3,5}\b/i',
+		// Sakura Internet: abc12345 (3 letters + 5 digits).
+		'sakura_account'  => '/\b[a-z]{3}\d{5}\b/i',
+		'sakura_domain'   => '/\b[\w-]+\.sakura\.ne\.jp\b/i',
+		// AWS: 12-digit account ID (with context).
+		'aws_account'     => '/\b\d{12}\b/',
+		// Azure: GUID subscription/resource ID.
+		'azure_guid'      => '/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i',
+		// GCP: project ID (lowercase, hyphens, 6-30 chars).
+		'gcp_project'     => '/\b[a-z][a-z0-9-]{4,28}[a-z0-9]\b/',
+		// ConoHa: account format.
+		'conoha_account'  => '/\bgnc[a-z0-9]{8,12}\b/i',
+		// Lolipop: subdomain format.
+		'lolipop_domain'  => '/\b[\w-]+\.lolipop\.jp\b/i',
+		// mixhost: account format.
+		'mixhost_domain'  => '/\b[\w-]+\.mixh\.jp\b/i',
+	);
+
+	/**
 	 * Detect PII type from field name and value.
 	 *
 	 * @since 1.0.0
@@ -275,6 +307,11 @@ class PIIP_PII_Detector {
 		// Check URL.
 		if ( $this->is_url( $value ) ) {
 			return 'url';
+		}
+
+		// Check hosting account/server ID.
+		if ( $this->is_hosting_id( $value ) ) {
+			return 'hosting';
 		}
 
 		// Check token/API key.
@@ -541,6 +578,88 @@ class PIIP_PII_Detector {
 	}
 
 	/**
+	 * Check if value is a hosting account/server ID.
+	 *
+	 * Supports Japanese and international hosting providers:
+	 * - Xserver (xs123456, sv1234)
+	 * - Sakura Internet (abc12345, *.sakura.ne.jp)
+	 * - AWS (12-digit account ID)
+	 * - Azure (GUID subscription ID)
+	 * - GCP (project ID)
+	 * - ConoHa, Lolipop, mixhost
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value The value to check.
+	 * @return bool True if hosting ID, false otherwise.
+	 */
+	public function is_hosting_id( $value ) {
+		// Skip very short or very long values.
+		$length = strlen( $value );
+		if ( $length < 5 || $length > 50 ) {
+			return false;
+		}
+
+		// Check against known hosting patterns.
+		foreach ( $this->hosting_patterns as $name => $pattern ) {
+			if ( 1 === preg_match( $pattern, $value ) ) {
+				// For AWS account (12 digits), require additional context to avoid false positives.
+				if ( 'aws_account' === $name ) {
+					// Only match if it looks like an AWS account ID (not a phone or other number).
+					$digits = preg_replace( '/\D/', '', $value );
+					if ( 12 === strlen( $digits ) && 12 === strlen( $value ) ) {
+						return true;
+					}
+					continue;
+				}
+
+				// For GCP project, avoid common words.
+				if ( 'gcp_project' === $name ) {
+					$common_words = array( 'example', 'default', 'project', 'website', 'content', 'message', 'activity' );
+					if ( in_array( strtolower( $value ), $common_words, true ) ) {
+						continue;
+					}
+				}
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get the hosting provider name from a hosting ID.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value The hosting ID value.
+	 * @return string|null Provider name or null.
+	 */
+	public function get_hosting_provider( $value ) {
+		$providers = array(
+			'xserver_account' => 'Xserver',
+			'xserver_server'  => 'Xserver',
+			'sakura_account'  => 'Sakura',
+			'sakura_domain'   => 'Sakura',
+			'aws_account'     => 'AWS',
+			'azure_guid'      => 'Azure',
+			'gcp_project'     => 'GCP',
+			'conoha_account'  => 'ConoHa',
+			'lolipop_domain'  => 'Lolipop',
+			'mixhost_domain'  => 'mixhost',
+		);
+
+		foreach ( $this->hosting_patterns as $name => $pattern ) {
+			if ( 1 === preg_match( $pattern, $value ) ) {
+				return isset( $providers[ $name ] ) ? $providers[ $name ] : 'Unknown';
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Validate credit card using Luhn algorithm.
 	 *
 	 * @since 1.0.0
@@ -704,6 +823,32 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find hosting account/server IDs.
+		foreach ( $this->hosting_patterns as $name => $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[0] as $match ) {
+					// Skip false positives.
+					if ( 'aws_account' === $name ) {
+						$digits = preg_replace( '/\D/', '', $match );
+						if ( 12 !== strlen( $digits ) || 12 !== strlen( $match ) ) {
+							continue;
+						}
+					}
+					if ( 'gcp_project' === $name ) {
+						$common_words = array( 'example', 'default', 'project', 'website', 'content', 'message', 'activity' );
+						if ( in_array( strtolower( $match ), $common_words, true ) ) {
+							continue;
+						}
+					}
+					$found[] = array(
+						'type'     => 'hosting',
+						'value'    => $match,
+						'provider' => $this->get_hosting_provider( $match ),
+					);
+				}
+			}
+		}
+
 		return $found;
 	}
 
@@ -719,15 +864,16 @@ class PIIP_PII_Detector {
 	 */
 	public function get_confidence( $type, $value, $context = '' ) {
 		$base_confidence = array(
-			'email' => 0.95, // Very reliable pattern.
-			'card'  => 0.95, // Luhn validation.
-			'ssn'   => 0.90, // Format + validation.
-			'ip'    => 0.95, // Very reliable pattern.
-			'phone' => 0.70, // Can have false positives.
-			'url'   => 0.90, // Reliable pattern.
-			'token' => 0.60, // Heuristic-based.
-			'name'  => 0.50, // Context-dependent.
-			'dob'   => 0.60, // Date could be anything.
+			'email'   => 0.95, // Very reliable pattern.
+			'card'    => 0.95, // Luhn validation.
+			'ssn'     => 0.90, // Format + validation.
+			'ip'      => 0.95, // Very reliable pattern.
+			'phone'   => 0.70, // Can have false positives.
+			'url'     => 0.90, // Reliable pattern.
+			'hosting' => 0.85, // Provider-specific patterns.
+			'token'   => 0.60, // Heuristic-based.
+			'name'    => 0.50, // Context-dependent.
+			'dob'     => 0.60, // Date could be anything.
 		);
 
 		$confidence = isset( $base_confidence[ $type ] ) ? $base_confidence[ $type ] : 0.5;
