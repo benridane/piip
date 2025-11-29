@@ -148,11 +148,20 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
+		// Consent phrases section.
+		add_settings_section(
+			'piip_consent_section',
+			__( 'Consent Opt-Out Phrases', 'piip' ),
+			array( $this, 'consent_section_callback' ),
+			'piip-settings'
+		);
+
 		// Add fields.
 		$this->add_general_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
 		$this->add_logging_fields();
+		$this->add_consent_fields();
 	}
 
 	/**
@@ -274,6 +283,26 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Add consent phrase fields.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return void
+	 */
+	private function add_consent_fields() {
+		add_settings_field(
+			'consent_phrases',
+			__( 'Consent Phrases', 'piip' ),
+			array( $this, 'consent_phrases_field_callback' ),
+			'piip-settings',
+			'piip_consent_section',
+			array(
+				'label_for' => 'consent_phrases',
+			)
+		);
+	}
+
+	/**
 	 * General section callback.
 	 *
 	 * @since 1.0.0
@@ -315,6 +344,17 @@ class PIIP_Admin_Settings {
 	 */
 	public function logging_section_callback() {
 		echo '<p>' . esc_html__( 'Configure logging and data retention settings.', 'piip' ) . '</p>';
+	}
+
+	/**
+	 * Consent section callback.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return void
+	 */
+	public function consent_section_callback() {
+		echo '<p>' . esc_html__( 'When content contains one of these phrases, PII masking will be skipped. Users can include these phrases to share personal information publicly.', 'piip' ) . '</p>';
 	}
 
 	/**
@@ -434,6 +474,95 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Consent phrases field callback.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param array $args Field arguments.
+	 * @return void
+	 *
+	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+	 */
+	public function consent_phrases_field_callback( $args ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		$options = get_option( 'piip_settings', array() );
+		$phrases = isset( $options['consent_phrases'] ) ? $options['consent_phrases'] : array();
+
+		// Default phrases if none set.
+		if ( empty( $phrases ) ) {
+			$phrases = array(
+				array(
+					'phrase'  => 'マスクを外すことに同意',
+					'enabled' => true,
+				),
+				array(
+					'phrase'  => '個人情報の公開に同意します',
+					'enabled' => true,
+				),
+				array(
+					'phrase'  => 'I consent to unmasking',
+					'enabled' => true,
+				),
+				array(
+					'phrase'  => 'I consent to sharing my personal information',
+					'enabled' => true,
+				),
+			);
+		}
+
+		echo '<div id="piip-consent-phrases">';
+
+		foreach ( $phrases as $index => $phrase_data ) {
+			$phrase  = isset( $phrase_data['phrase'] ) ? $phrase_data['phrase'] : '';
+			$enabled = ! empty( $phrase_data['enabled'] );
+
+			printf(
+				'<div class="piip-phrase-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+					<input type="checkbox" name="piip_settings[consent_phrases][%d][enabled]" value="1" %s>
+					<input type="text" name="piip_settings[consent_phrases][%d][phrase]" value="%s" class="regular-text" style="flex: 1;">
+					<button type="button" class="button piip-remove-phrase" style="color: #a00;">%s</button>
+				</div>',
+				$index,
+				checked( $enabled, true, false ),
+				$index,
+				esc_attr( $phrase ),
+				esc_html__( 'Remove', 'piip' )
+			);
+		}
+
+		echo '</div>';
+
+		printf(
+			'<button type="button" id="piip-add-phrase" class="button" style="margin-top: 8px;">%s</button>',
+			esc_html__( '+ Add Phrase', 'piip' )
+		);
+
+		echo '<p class="description">' . esc_html__( 'Check to enable a phrase. Uncheck to disable without removing.', 'piip' ) . '</p>';
+
+		// JavaScript for add/remove functionality.
+		?>
+		<script>
+		jQuery(document).ready(function($) {
+			var phraseIndex = <?php echo count( $phrases ); ?>;
+
+			$('#piip-add-phrase').on('click', function() {
+				var newRow = '<div class="piip-phrase-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">' +
+					'<input type="checkbox" name="piip_settings[consent_phrases][' + phraseIndex + '][enabled]" value="1" checked>' +
+					'<input type="text" name="piip_settings[consent_phrases][' + phraseIndex + '][phrase]" value="" class="regular-text" style="flex: 1;" placeholder="<?php echo esc_js( __( 'Enter consent phrase...', 'piip' ) ); ?>">' +
+					'<button type="button" class="button piip-remove-phrase" style="color: #a00;"><?php echo esc_js( __( 'Remove', 'piip' ) ); ?></button>' +
+					'</div>';
+				$('#piip-consent-phrases').append(newRow);
+				phraseIndex++;
+			});
+
+			$(document).on('click', '.piip-remove-phrase', function() {
+				$(this).closest('.piip-phrase-row').remove();
+			});
+		});
+		</script>
+		<?php
+	}
+
+	/**
 	 * Sanitize settings.
 	 *
 	 * @since 1.0.0
@@ -470,6 +599,21 @@ class PIIP_Admin_Settings {
 		// Sanitize log retention days.
 		if ( isset( $input['log_retention_days'] ) ) {
 			$sanitized['log_retention_days'] = absint( $input['log_retention_days'] );
+		}
+
+		// Sanitize consent phrases.
+		if ( isset( $input['consent_phrases'] ) && is_array( $input['consent_phrases'] ) ) {
+			$sanitized['consent_phrases'] = array();
+			foreach ( $input['consent_phrases'] as $phrase_data ) {
+				if ( ! empty( $phrase_data['phrase'] ) ) {
+					$sanitized['consent_phrases'][] = array(
+						'phrase'  => sanitize_text_field( $phrase_data['phrase'] ),
+						'enabled' => ! empty( $phrase_data['enabled'] ) ? 1 : 0,
+					);
+				}
+			}
+			// Re-index array.
+			$sanitized['consent_phrases'] = array_values( $sanitized['consent_phrases'] );
 		}
 
 		return $sanitized;

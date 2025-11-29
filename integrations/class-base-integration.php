@@ -135,6 +135,12 @@ abstract class PIIP_Base_Integration {
 			return $content;
 		}
 
+		// Check for consent phrase - skip masking if user consents.
+		if ( $this->has_consent_phrase( $content ) ) {
+			$this->log_consent_event( $context, $item_id );
+			return $content;
+		}
+
 		$masked_content = $this->masker->mask_text( $content );
 
 		// Log if content was changed.
@@ -143,6 +149,97 @@ abstract class PIIP_Base_Integration {
 		}
 
 		return $masked_content;
+	}
+
+	/**
+	 * Check if content contains an enabled consent phrase.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $content Content to check.
+	 * @return bool True if consent phrase found.
+	 */
+	protected function has_consent_phrase( $content ) {
+		$phrases = $this->get_enabled_consent_phrases();
+
+		if ( empty( $phrases ) ) {
+			return false;
+		}
+
+		foreach ( $phrases as $phrase ) {
+			if ( false !== mb_stripos( $content, $phrase ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get enabled consent phrases from settings.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return array Array of enabled phrase strings.
+	 */
+	protected function get_enabled_consent_phrases() {
+		$settings = get_option( 'piip_settings', array() );
+		$phrases  = isset( $settings['consent_phrases'] ) ? $settings['consent_phrases'] : array();
+
+		if ( empty( $phrases ) ) {
+			// Return default phrases if none configured.
+			return $this->get_default_consent_phrases();
+		}
+
+		// Filter to only enabled phrases.
+		$enabled = array();
+		foreach ( $phrases as $phrase_data ) {
+			if ( ! empty( $phrase_data['enabled'] ) && ! empty( $phrase_data['phrase'] ) ) {
+				$enabled[] = $phrase_data['phrase'];
+			}
+		}
+
+		return $enabled;
+	}
+
+	/**
+	 * Get default consent phrases.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return array Default phrases.
+	 */
+	protected function get_default_consent_phrases() {
+		return array(
+			'マスクを外すことに同意',
+			'個人情報の公開に同意します',
+			'I consent to unmasking',
+			'I consent to sharing my personal information',
+		);
+	}
+
+	/**
+	 * Log consent opt-out event.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $context Context/field name.
+	 * @param int    $item_id Item ID.
+	 * @return void
+	 */
+	protected function log_consent_event( $context, $item_id ) {
+		$this->logger->log_masking_event(
+			array(
+				'form_id'        => $item_id,
+				'form_type'      => $this->slug,
+				'field_name'     => $context,
+				'field_label'    => $context,
+				'pii_type'       => 'consent_optout',
+				'original_value' => '[CONSENT OPT-OUT]',
+				'masked_value'   => '[NOT MASKED - USER CONSENT]',
+				'masking_method' => 'consent_bypass',
+			)
+		);
 	}
 
 	/**
