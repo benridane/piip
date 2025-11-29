@@ -1,0 +1,38 @@
+# Dependencies
+vendor/
+node_modules/
+
+# Build output
+build/
+*.zip
+
+# IDE / Editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# WordPress development
+.wp-env.override.json
+
+# Logs
+*.log
+debug.log
+
+# Local config
+.claude/
+*.local.*
+
+# PHP tools cache
+.phpcs-cache
+.php-cs-fixer.cache
+phpunit.xml
+.phpunit.result.cache

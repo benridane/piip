@@ -1,0 +1,59 @@
+# Development files
+.distignore
+.gitignore
+.git
+.github
+.claude
+
+# Composer development
+composer.json
+composer.lock
+vendor/
+
+# Development tools
+phpcs.xml.dist
+phpunit.xml.dist
+.phpcs.xml
+.phpunit.xml
+
+# Build tools
+bin/
+build/
+scripts/
+Makefile
+
+# Documentation (dev only)
+PHPCS-VALIDATION.md
+CONTRIBUTING.md
+CHANGELOG.md
+
+# IDE / Editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.editorconfig
+
+# wp-env
+.wp-env.json
+.wp-env.override.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+tests/
+phpunit/
+*.test.php
+
+# Node (if added later)
+node_modules/
+package.json
+package-lock.json
+webpack.config.js
+.babelrc
+
+# Misc
+*.zip
+*.tar.gz
