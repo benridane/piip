@@ -1,17 +1,16 @@
 <?php
 /**
  * Plugin Name:       PIIP - PII Protection
- * Plugin URI:        https://github.com/yourusername/piip
- * Description:       Automatically masks personally identifiable information (PII) in WordPress community plugins to protect user privacy.
+ * Plugin URI:        https://benridane.com/piip
+ * Description:       Automatically masks personally identifiable information (PII) in community plugins to protect user privacy.
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
- * Author:            Your Name
- * Author URI:        https://yourwebsite.com
+ * Author:            Benridane
+ * Author URI:        https://benridane.com
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       piip
- * Domain Path:       /languages
  *
  * @package PIIP
  * @since 1.0.0
@@ -146,7 +145,6 @@ class PIIP_Plugin {
 		register_deactivation_hook( __FILE__, array( $this, 'deactivate' ) );
 
 		add_action( 'plugins_loaded', array( $this, 'init' ) );
-		add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
 	}
 
 	/**
@@ -233,21 +231,6 @@ class PIIP_Plugin {
 	 */
 	public function get_integrations() {
 		return $this->integrations;
-	}
-
-	/**
-	 * Load plugin textdomain for translations.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @return void
-	 */
-	public function load_textdomain() {
-		load_plugin_textdomain(
-			'piip',
-			false,
-			dirname( PIIP_PLUGIN_BASENAME ) . '/languages'
-		);
 	}
 
 	/**

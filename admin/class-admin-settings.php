@@ -521,9 +521,9 @@ class PIIP_Admin_Settings {
 					<input type="text" name="piip_settings[consent_phrases][%d][phrase]" value="%s" class="regular-text" style="flex: 1;">
 					<button type="button" class="button piip-remove-phrase" style="color: #a00;">%s</button>
 				</div>',
-				$index,
+				absint( $index ),
 				checked( $enabled, true, false ),
-				$index,
+				absint( $index ),
 				esc_attr( $phrase ),
 				esc_html__( 'Remove', 'piip' )
 			);

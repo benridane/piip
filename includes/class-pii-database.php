@@ -121,6 +121,7 @@ class PIIP_PII_Database {
 			unset( $data['original_value'] );
 		}
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Custom table for plugin data, no WordPress API available.
 		$result = $wpdb->insert(
 			$this->table_name,
 			array(

@@ -1,55 +1,58 @@
-=== PIIP - PII Protection for WordPress Forms ===
-Contributors: yourusername
-Tags: privacy, pii, gdpr, forms, security, data-protection, contact-form-7
+=== PIIP - PII Protection ===
+Contributors: benridane
+Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.0
-Tested up to: 6.7
+Tested up to: 6.8
 Requires PHP: 7.4
 Stable tag: 1.0.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically masks personally identifiable information (PII) in form submissions to protect user privacy and comply with GDPR.
+Automatically masks personally identifiable information (PII) in community plugin submissions to protect user privacy and comply with GDPR.
 
 == Description ==
 
-PIIP (PII Protection) is a WordPress plugin that automatically detects and masks personally identifiable information (PII) in form submissions before the data is saved to your database. This helps protect user privacy and ensures GDPR compliance.
+PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in community plugin content before the data is saved to your database. This helps protect user privacy and ensures GDPR compliance.
 
 = Key Features =
 
-* **Automatic PII Detection**: Intelligently detects 8 types of PII including emails, phone numbers, names, addresses, credit cards, SSN, passwords, and API tokens
+* **Automatic PII Detection**: Intelligently detects multiple types of PII including emails, phone numbers, names, addresses, credit cards, SSN/My Number, passwords, API tokens, IP addresses, and hosting account IDs
 * **Server-Side Masking**: All masking happens on the server (PHP) for maximum security - cannot be bypassed by users
-* **Form Plugin Support**: Works seamlessly with Contact Form 7, Snow Monkey Forms, and other popular form plugins
+* **Community Plugin Support**: Works seamlessly with wpForo, BuddyPress, bbPress, and other popular community plugins
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
+* **Consent Opt-Out**: Users can include consent phrases to skip masking when sharing personal info publicly
 * **Audit Trail**: Complete logging of all masking events with export to CSV
 * **GDPR Compliant**: Automatic log cleanup based on configurable retention period (30-365 days)
-* **Zero Performance Impact**: Efficient processing with minimal overhead (<20ms per form submission)
-* **WordPress Standards**: Follows all WordPress coding standards and best practices
+* **Presidio-Level Detection**: High-accuracy detection with validation (Luhn for credit cards, check digits for My Number)
 
 = Supported PII Types =
 
 * Email addresses (example@domain.com → e***@domain.com)
-* Phone numbers (+1-234-567-8900 → ***-***-8900)
-* Names (John Doe → J*** D*** / 山田太郎 → 山田**)
+* Phone numbers (Japanese mobile/landline, international formats)
+* Names (John Doe → J*** D*** / 山田太郎 → 山***)
 * Addresses (masked to ***)
-* Credit card numbers (4532-1234-5678-9010 → ****-****-****-9010)
-* Social Security Numbers (123-45-6789 → ***-**-6789)
+* Credit card numbers with Luhn validation (4532-1234-5678-9010 → ****-****-****-9010)
+* Social Security Numbers / Japanese My Number with check digit validation
 * Passwords (masked to [REDACTED])
 * API Tokens/Keys (partial masking showing first and last 4 characters)
+* IP Addresses (192.168.1.1 → 192.***.***1)
+* Hosting Account IDs (Xserver, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
 
-= Supported Form Plugins =
+= Supported Community Plugins =
 
-* Contact Form 7
-* Snow Monkey Forms
+* wpForo Forum
+* BuddyPress
+* bbPress
 * More integrations coming soon!
 
 = How It Works =
 
-1. User submits a form on your website
+1. User posts content in a community plugin
 2. PIIP intercepts the submission before database save
 3. Automatically detects PII using field names, regex patterns, and validation
 4. Masks detected PII according to your settings
 5. Logs the masking event (optional)
-6. Form processes normally with masked data
+6. Content saves normally with masked data
 
 = Privacy & Security =
 
@@ -63,7 +66,7 @@ PIIP (PII Protection) is a WordPress plugin that automatically detects and masks
 
 = Automatic Installation =
 
-1. Log in to your WordPress admin panel
+1. Log in to your admin panel
 2. Go to Plugins → Add New
 3. Search for "PIIP" or "PII Protection"
 4. Click "Install Now" and then "Activate"
@@ -73,38 +76,38 @@ PIIP (PII Protection) is a WordPress plugin that automatically detects and masks
 
 1. Download the plugin ZIP file
 2. Upload to `/wp-content/plugins/piip` directory
-3. Activate the plugin through the 'Plugins' menu in WordPress
+3. Activate the plugin through the 'Plugins' menu
 4. Go to Settings → PII Protection to configure
 
 = After Activation =
 
 1. Navigate to **Settings → PII Protection**
-2. Review the default settings (all PII types are masked by default)
-3. Adjust which PII types to mask according to your needs
-4. Configure log retention period (default: 90 days)
-5. Save settings
-6. Test with a form submission to verify masking is working
-7. Check **Tools → PII Masking Logs** to see masked entries
+2. Enable/disable desired integrations (wpForo, BuddyPress, bbPress)
+3. Select which PII types to mask
+4. Configure consent phrases for opt-out feature
+5. Configure log retention period (default: 90 days)
+6. Save settings
+7. Test with a post to verify masking is working
 
 == Frequently Asked Questions ==
 
-= Does this work with Contact Form 7? =
+= Does this work with wpForo? =
 
-Yes! PIIP has native integration with Contact Form 7 and will automatically mask PII in all CF7 form submissions.
+Yes! PIIP has native integration with wpForo and will automatically mask PII in forum topics, posts, and private messages.
 
-= Does this work with other form plugins? =
+= Does this work with BuddyPress? =
 
-Currently supported:
-- Contact Form 7
-- Snow Monkey Forms
+Yes! PIIP supports BuddyPress activities, profile fields, private messages, group descriptions, and activity comments.
 
-We plan to add support for Gravity Forms, WPForms, Ninja Forms, and more in future releases.
+= Can users opt out of masking? =
+
+Yes. If enabled, users can include consent phrases like "マスクを外すことに同意" or "I consent to unmasking" in their content to skip PII masking for that specific post.
 
 = Will this slow down my website? =
 
-No. PIIP adds minimal processing time (<20ms per form submission) which is imperceptible to users. All processing happens server-side after form submission.
+No. PIIP adds minimal processing time (<20ms per submission) which is imperceptible to users. All processing happens server-side after submission.
 
-= Can users bypass the masking by disabling JavaScript? =
+= Can users bypass the masking? =
 
 No. All masking happens on the server (PHP), so it cannot be bypassed by disabling JavaScript or using browser developer tools.
 
@@ -116,7 +119,7 @@ No. The original data is never stored. We only store:
 
 = How long are logs kept? =
 
-By default, logs are kept for 90 days. You can configure this in Settings → PII Protection to anywhere from 30 to 365 days. Logs are automatically deleted after the retention period expires.
+By default, logs are kept for 90 days. You can configure this in Settings → PII Protection to anywhere from 30 to 365 days.
 
 = Is this GDPR compliant? =
 
@@ -126,41 +129,24 @@ Yes. PIIP helps with GDPR compliance by:
 - Automatic data deletion based on retention policies
 - No third-party data sharing (everything stays on your server)
 
-= Can I export the masking logs? =
-
-Yes. Go to Tools → PII Masking Logs and click "Export to CSV" to download all logs.
-
-= What happens during uninstall? =
-
-When you uninstall (not just deactivate) the plugin, all settings, database tables, and logs are completely removed from your system.
-
-= Can I customize the masking patterns? =
-
-The current version uses predefined masking patterns optimized for privacy and usability. Future versions may include customization options.
-
-= Does this work with multisite? =
-
-The plugin is compatible with multisite installations and can be activated per-site or network-wide.
-
 == Screenshots ==
 
-1. Settings page - Configure which PII types to mask
-2. Masking logs - View audit trail of all masked submissions
-3. Example of masked email in form submission
-4. CSV export of masking logs
+1. Settings page - Configure integrations and PII types to mask
+2. Consent phrases configuration
+3. Masking logs - View audit trail of all masked submissions
+4. Example of masked content in forum post
 
 == Changelog ==
 
 = 1.0.0 - 2025-01-15 =
 * Initial release
-* Support for 8 PII types (email, phone, name, address, card, SSN, password, token)
-* Contact Form 7 integration
-* Snow Monkey Forms integration
+* Support for multiple PII types with validation
+* wpForo, BuddyPress, bbPress integrations
+* Consent-based opt-out feature
 * Admin settings page
 * Masking logs with CSV export
 * Automatic log cleanup (GDPR compliance)
-* WordPress Coding Standards compliant
-* Full PHPDoc documentation
+* Hosting account ID detection (Japanese and international providers)
 
 == Upgrade Notice ==
 
@@ -176,20 +162,17 @@ PIIP - PII Protection does NOT:
 * Share data with third parties
 
 PIIP DOES:
-* Process form data locally on your server
-* Store masked PII and audit logs in your WordPress database
+* Process content locally on your server
+* Store masked PII and audit logs in your database
 * Automatically delete logs after the configured retention period
 
 == Support ==
 
 For support, bug reports, or feature requests:
-* GitHub: https://github.com/yourusername/piip
-* WordPress Support Forum: https://wordpress.org/support/plugin/piip/
+* Website: https://benridane.com/piip
 
 == Development ==
 
 Development happens on GitHub. Pull requests welcome!
-* GitHub Repository: https://github.com/yourusername/piip
-* Follow WordPress Coding Standards
+* Follow coding standards
 * All code must pass `composer run phpcs`
-* Test with `wp-env` before submitting PRs
