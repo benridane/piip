@@ -47,21 +47,24 @@ class PIIP_BuddyPress_Integration extends PIIP_Base_Integration {
 	 * @return void
 	 */
 	protected function init_hooks() {
-		// Mask activity content.
-		add_filter( 'bp_activity_content_before_save', array( $this, 'mask_activity_content' ), 10, 1 );
-		add_filter( 'bp_activity_action_before_save', array( $this, 'mask_activity_action' ), 10, 1 );
+		// Mask activity content before save.
+		add_filter( 'bp_activity_post_update_content', array( $this, 'mask_activity_content' ), 10, 1 );
+		add_filter( 'bp_activity_new_update_content', array( $this, 'mask_activity_content' ), 10, 1 );
+
+		// Mask activity via action hook (before save, passed by reference).
+		add_action( 'bp_activity_before_save', array( $this, 'mask_activity_before_save' ), 10, 1 );
 
 		// Mask profile fields.
-		add_filter( 'xprofile_data_value_before_save', array( $this, 'mask_profile_field' ), 10, 3 );
+		add_filter( 'xprofile_data_value_before_save', array( $this, 'mask_profile_field' ), 10, 4 );
 
 		// Mask private messages.
-		add_filter( 'messages_message_content_before_save', array( $this, 'mask_message_content' ), 10, 1 );
-		add_filter( 'messages_message_subject_before_save', array( $this, 'mask_message_subject' ), 10, 1 );
+		add_filter( 'messages_message_content_before_save', array( $this, 'mask_message_content' ), 5, 1 );
+		add_filter( 'messages_message_subject_before_save', array( $this, 'mask_message_subject' ), 5, 1 );
 
 		// Mask group descriptions.
 		add_filter( 'groups_group_description_before_save', array( $this, 'mask_group_description' ), 10, 2 );
 
-		// Mask comments on activities.
+		// Mask activity comments.
 		add_filter( 'bp_activity_comment_content', array( $this, 'mask_activity_comment' ), 10, 1 );
 	}
 
@@ -89,15 +92,21 @@ class PIIP_BuddyPress_Integration extends PIIP_Base_Integration {
 	}
 
 	/**
-	 * Mask activity action before save.
+	 * Mask activity object before save (action hook).
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $action Activity action string.
-	 * @return string Masked action.
+	 * @param BP_Activity_Activity $activity Activity object (passed by reference).
+	 * @return void
 	 */
-	public function mask_activity_action( $action ) {
-		return $this->mask_content( $action, 'activity_action', 0 );
+	public function mask_activity_before_save( &$activity ) {
+		if ( ! empty( $activity->content ) ) {
+			$activity->content = $this->mask_content( $activity->content, 'activity_content', $activity->id );
+		}
+
+		if ( ! empty( $activity->action ) ) {
+			$activity->action = $this->mask_content( $activity->action, 'activity_action', $activity->id );
+		}
 	}
 
 	/**
@@ -105,21 +114,29 @@ class PIIP_BuddyPress_Integration extends PIIP_Base_Integration {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $value    Field value.
-	 * @param int    $field_id Field ID.
-	 * @param int    $user_id  User ID (BuddyPress may pass this as third param in some versions).
-	 * @return string Masked value.
+	 * @param mixed $value         Field value.
+	 * @param int   $field_data_id Field data ID.
+	 * @param bool  $reserialize   Whether to reserialize arrays.
+	 * @param mixed $field_data    Field data object (passed in some versions).
+	 * @return mixed Masked value.
 	 */
-	public function mask_profile_field( $value, $field_id, $user_id = 0 ) {
+	public function mask_profile_field( $value, $field_data_id = 0, $reserialize = true, $field_data = null ) {
 		if ( empty( $value ) || ! is_string( $value ) ) {
 			return $value;
 		}
 
-		return $this->mask_content( $value, 'profile_field_' . $field_id, $user_id );
+		$user_id = 0;
+		if ( is_object( $field_data ) && isset( $field_data->user_id ) ) {
+			$user_id = $field_data->user_id;
+		}
+
+		return $this->mask_content( $value, 'profile_field_' . $field_data_id, $user_id );
 	}
 
 	/**
 	 * Mask message content before save.
+	 *
+	 * Priority 5 to run before wp_filter_kses (priority 1).
 	 *
 	 * @since 1.0.0
 	 *
