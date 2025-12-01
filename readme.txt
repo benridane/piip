@@ -178,7 +178,7 @@ PIIP DOES:
 == Support ==
 
 For support, bug reports, or feature requests:
-* Website: https://benridane.com/piip
+* Website: https://github.com/benridane/piip
 
 == Development ==
 
