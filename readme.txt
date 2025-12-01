@@ -145,7 +145,7 @@ Yes. PIIP helps with GDPR compliance by:
 
 == Changelog ==
 
-= 1.0.0 - 2025-01-15 =
+= 0.2.0 - 2025-12-01 =
 * Initial release
 * Support for multiple PII types with validation (email, phone, address, credit card, SSN/My Number, password, token, IP, hosting IDs)
 * WordPress Comments integration
@@ -159,7 +159,7 @@ Yes. PIIP helps with GDPR compliance by:
 
 == Upgrade Notice ==
 
-= 1.0.0 =
+= 0.2.0 =
 Initial release of PIIP - PII Protection plugin.
 
 == Privacy Policy ==
