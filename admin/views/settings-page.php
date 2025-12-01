@@ -29,8 +29,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<hr>
 
 	<h2><?php esc_html_e( 'Information', 'piip' ); ?></h2>
-	<p><?php esc_html_e( 'This plugin automatically masks personally identifiable information (PII) in form submissions before saving to the database.', 'piip' ); ?></p>
-	<p><?php esc_html_e( 'Supported form plugins: Contact Form 7, Snow Monkey Forms', 'piip' ); ?></p>
+	<p><?php esc_html_e( 'This plugin automatically masks personally identifiable information (PII) in WordPress comments and community plugin content before saving to the database.', 'piip' ); ?></p>
+	<p><?php esc_html_e( 'Supported integrations: WordPress Comments, wpForo, BuddyPress, bbPress', 'piip' ); ?></p>
 	<p>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=piip-logs' ) ); ?>" class="button">
 			<?php esc_html_e( 'View Masking Logs', 'piip' ); ?>
