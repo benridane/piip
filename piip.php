@@ -4,8 +4,8 @@
  * Plugin URI:        https://benridane.com/piip
  * Description:       Automatically masks personally identifiable information (PII) in community plugins to protect user privacy.
  * Version:           0.2.0
- * Requires at least: 6.0
- * Requires PHP:      7.4
+ * Requires at least: 6.9
+ * Requires PHP:      8.2
  * Author:            Benridane
  * Author URI:        https://benridane.com
  * License:           GPL-2.0-or-later

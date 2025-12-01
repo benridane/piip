@@ -2,7 +2,7 @@
 Contributors: benridane
 Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 8.2
 Stable tag: 0.2.0
 License: GPL-2.0-or-later
