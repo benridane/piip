@@ -131,6 +131,7 @@ class PIIP_Plugin {
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-wpforo-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-buddypress-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-bbpress-integration.php';
+		require_once PIIP_PLUGIN_DIR . 'integrations/class-comments-integration.php';
 	}
 
 	/**
@@ -200,6 +201,10 @@ class PIIP_Plugin {
 				'class' => 'PIIP_bbPress_Integration',
 				'check' => array( 'PIIP_bbPress_Integration', 'is_plugin_active' ),
 			),
+			'comments'   => array(
+				'class' => 'PIIP_Comments_Integration',
+				'check' => array( 'PIIP_Comments_Integration', 'is_plugin_active' ),
+			),
 		);
 
 		// Initialize enabled integrations.
@@ -250,7 +255,6 @@ class PIIP_Plugin {
 			'enable_masking'       => 1,
 			'mask_email'           => 1,
 			'mask_phone'           => 1,
-			'mask_name'            => 1,
 			'mask_address'         => 1,
 			'mask_card'            => 1,
 			'mask_ssn'             => 1,
@@ -261,6 +265,7 @@ class PIIP_Plugin {
 			'integration_wpforo'   => 0,
 			'integration_buddypress' => 0,
 			'integration_bbpress' => 0,
+			'integration_comments' => 0,
 		);
 
 		add_option( 'piip_settings', $default_settings );

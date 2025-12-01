@@ -52,6 +52,12 @@ class PIIP_Admin_Settings {
 	 */
 	private function setup_available_integrations() {
 		$this->available_integrations = array(
+			'comments'   => array(
+				'name'        => 'Comments',
+				'description' => __( 'Native WordPress comment system', 'piip' ),
+				'class'       => 'PIIP_Comments_Integration',
+				'check'       => array( 'PIIP_Comments_Integration', 'is_plugin_active' ),
+			),
 			'wpforo'     => array(
 				'name'        => 'wpForo',
 				'description' => __( 'Forum discussions and private messages', 'piip' ),
@@ -124,6 +130,14 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
+		// WordPress Core section.
+		add_settings_section(
+			'piip_wordpress_core_section',
+			__( 'Core', 'piip' ),
+			array( $this, 'wordpress_core_section_callback' ),
+			'piip-settings'
+		);
+
 		// Integrations section.
 		add_settings_section(
 			'piip_integrations_section',
@@ -158,6 +172,7 @@ class PIIP_Admin_Settings {
 
 		// Add fields.
 		$this->add_general_fields();
+		$this->add_wordpress_core_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
 		$this->add_logging_fields();
@@ -186,6 +201,32 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Add WordPress Core fields.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return void
+	 */
+	private function add_wordpress_core_fields() {
+		// Add Comments integration field.
+		if ( isset( $this->available_integrations['comments'] ) ) {
+			$integration = $this->available_integrations['comments'];
+			add_settings_field(
+				'integration_comments',
+				$integration['name'],
+				array( $this, 'integration_field_callback' ),
+				'piip-settings',
+				'piip_wordpress_core_section',
+				array(
+					'label_for'   => 'integration_comments',
+					'slug'        => 'comments',
+					'integration' => $integration,
+				)
+			);
+		}
+	}
+
+	/**
 	 * Add integration fields.
 	 *
 	 * @since 1.0.0
@@ -194,6 +235,11 @@ class PIIP_Admin_Settings {
 	 */
 	private function add_integration_fields() {
 		foreach ( $this->available_integrations as $slug => $integration ) {
+			// Skip comments as it's in WordPress Core section.
+			if ( 'comments' === $slug ) {
+				continue;
+			}
+
 			add_settings_field(
 				'integration_' . $slug,
 				$integration['name'],
@@ -220,7 +266,6 @@ class PIIP_Admin_Settings {
 		$pii_types = array(
 			'email'    => __( 'Email Addresses', 'piip' ),
 			'phone'    => __( 'Phone Numbers', 'piip' ),
-			'name'     => __( 'Names', 'piip' ),
 			'address'  => __( 'Addresses', 'piip' ),
 			'card'     => __( 'Credit Card Numbers', 'piip' ),
 			'ssn'      => __( 'Social Security Numbers', 'piip' ),
@@ -314,6 +359,17 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * WordPress Core section callback.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return void
+	 */
+	public function wordpress_core_section_callback() {
+		echo '<p>' . esc_html__( 'Enable PII masking for WordPress core features.', 'piip' ) . '</p>';
+	}
+
+	/**
 	 * Integrations section callback.
 	 *
 	 * @since 1.0.0
@@ -387,10 +443,18 @@ class PIIP_Admin_Settings {
 
 		// Show status.
 		if ( $is_plugin_active ) {
-			printf(
-				'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
-				esc_html__( 'Plugin Active', 'piip' )
-			);
+			// Different status text for core features vs plugins.
+			if ( 'comments' === $slug ) {
+				printf(
+					'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
+					esc_html__( 'Available', 'piip' )
+				);
+			} else {
+				printf(
+					'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
+					esc_html__( 'Plugin Active', 'piip' )
+				);
+			}
 		} else {
 			printf(
 				'<span class="piip-status piip-status-inactive" style="color: #999; margin-left: 10px;">%s</span>',
@@ -578,7 +642,6 @@ class PIIP_Admin_Settings {
 			'enable_masking',
 			'mask_email',
 			'mask_phone',
-			'mask_name',
 			'mask_address',
 			'mask_card',
 			'mask_ssn',

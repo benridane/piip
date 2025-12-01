@@ -3,21 +3,22 @@ Contributors: benridane
 Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.0
 Tested up to: 6.8
-Requires PHP: 7.4
-Stable tag: 1.0.0
+Requires PHP: 8.2
+Stable tag: 0.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically masks personally identifiable information (PII) in community plugin submissions to protect user privacy and comply with GDPR.
+Automatically masks personally identifiable information (PII) in WordPress comments and community plugin content to protect user privacy and comply with GDPR.
 
 == Description ==
 
-PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in community plugin content before the data is saved to your database. This helps protect user privacy and ensures GDPR compliance.
+PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in WordPress comments and community plugin content before the data is saved to your database. This helps protect user privacy and ensures GDPR compliance.
 
 = Key Features =
 
-* **Automatic PII Detection**: Intelligently detects multiple types of PII including emails, phone numbers, names, addresses, credit cards, SSN/My Number, passwords, API tokens, IP addresses, and hosting account IDs
+* **Automatic PII Detection**: Intelligently detects multiple types of PII including emails, phone numbers, addresses, credit cards, SSN/My Number, passwords, API tokens, IP addresses, and hosting account IDs
 * **Server-Side Masking**: All masking happens on the server (PHP) for maximum security - cannot be bypassed by users
+* **WordPress Core Support**: Native support for WordPress comments
 * **Community Plugin Support**: Works seamlessly with wpForo, BuddyPress, bbPress, and other popular community plugins
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
 * **Consent Opt-Out**: Users can include consent phrases to skip masking when sharing personal info publicly
@@ -29,7 +30,6 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 
 * Email addresses (example@domain.com → e***@domain.com)
 * Phone numbers (Japanese mobile/landline, international formats)
-* Names (John Doe → J*** D*** / 山田太郎 → 山***)
 * Addresses (masked to ***)
 * Credit card numbers with Luhn validation (4532-1234-5678-9010 → ****-****-****-9010)
 * Social Security Numbers / Japanese My Number with check digit validation
@@ -38,16 +38,19 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * IP Addresses (192.168.1.1 → 192.***.***1)
 * Hosting Account IDs (Xserver, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
 
-= Supported Community Plugins =
+= Supported Integrations =
 
-* wpForo Forum
-* BuddyPress
-* bbPress
+* **WordPress Core**
+  * Comments
+* **Community Plugins**
+  * wpForo Forum
+  * BuddyPress
+  * bbPress
 * More integrations coming soon!
 
 = How It Works =
 
-1. User posts content in a community plugin
+1. User posts a comment or content in a community plugin
 2. PIIP intercepts the submission before database save
 3. Automatically detects PII using field names, regex patterns, and validation
 4. Masks detected PII according to your settings
@@ -82,14 +85,18 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 = After Activation =
 
 1. Navigate to **Settings → PII Protection**
-2. Enable/disable desired integrations (wpForo, BuddyPress, bbPress)
+2. Enable/disable desired integrations (Comments, wpForo, BuddyPress, bbPress)
 3. Select which PII types to mask
 4. Configure consent phrases for opt-out feature
 5. Configure log retention period (default: 90 days)
 6. Save settings
-7. Test with a post to verify masking is working
+7. Test with a post or comment to verify masking is working
 
 == Frequently Asked Questions ==
+
+= Does this work with WordPress comments? =
+
+Yes! PIIP has native support for WordPress core comments. Simply enable the Comments integration in Settings → PII Protection.
 
 = Does this work with wpForo? =
 
@@ -140,13 +147,15 @@ Yes. PIIP helps with GDPR compliance by:
 
 = 1.0.0 - 2025-01-15 =
 * Initial release
-* Support for multiple PII types with validation
+* Support for multiple PII types with validation (email, phone, address, credit card, SSN/My Number, password, token, IP, hosting IDs)
+* WordPress Comments integration
 * wpForo, BuddyPress, bbPress integrations
 * Consent-based opt-out feature
 * Admin settings page
 * Masking logs with CSV export
 * Automatic log cleanup (GDPR compliance)
 * Hosting account ID detection (Japanese and international providers)
+* Note: Name masking excluded due to accuracy limitations
 
 == Upgrade Notice ==
 
