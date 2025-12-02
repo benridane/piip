@@ -204,26 +204,77 @@ class PIIP_PII_Logger {
 			return '';
 		}
 
+		// Use output buffering with fputcsv for proper CSV encoding.
+		ob_start();
+		$output = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Using php://output for CSV generation.
+
 		// CSV headers.
-		$csv_output = "ID,Date,Form ID,Form Type,Field Name,PII Type,Masked Value,IP Address,User ID\n";
+		fputcsv(
+			$output,
+			array(
+				'ID',
+				'Date',
+				'Form ID',
+				'Form Type',
+				'Field Name',
+				'PII Type',
+				'Masked Value',
+				'IP Address',
+				'User ID',
+			)
+		);
 
 		// CSV rows.
 		foreach ( $logs as $log ) {
-			$csv_output .= sprintf(
-				"%d,%s,%d,%s,%s,%s,%s,%s,%s\n",
-				$log->id,
-				$log->created_at,
-				$log->form_id,
-				$log->form_type,
-				$log->field_name,
-				$log->pii_type,
-				str_replace( ',', ';', $log->masked_value ),
-				$log->ip_address,
-				$log->user_id ? $log->user_id : 'N/A'
+			fputcsv(
+				$output,
+				array(
+					$log->id,
+					$log->created_at,
+					$log->form_id,
+					$this->sanitize_csv_field( $log->form_type ),
+					$this->sanitize_csv_field( $log->field_name ),
+					$this->sanitize_csv_field( $log->pii_type ),
+					$this->sanitize_csv_field( $log->masked_value ),
+					$log->ip_address,
+					$log->user_id ? $log->user_id : 'N/A',
+				)
 			);
 		}
 
-		return $csv_output;
+		fclose( $output ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing php://output stream.
+
+		return ob_get_clean();
+	}
+
+	/**
+	 * Sanitize CSV field to prevent formula injection.
+	 *
+	 * Prevents CSV injection attacks by prefixing dangerous characters
+	 * that could be interpreted as formulas in spreadsheet applications.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $field Field value.
+	 * @return string Sanitized field.
+	 */
+	private function sanitize_csv_field( $field ) {
+		if ( empty( $field ) || ! is_string( $field ) ) {
+			return $field;
+		}
+
+		// Characters that can trigger formula execution in Excel/LibreOffice.
+		$dangerous_chars = array( '=', '+', '-', '@', "\t", "\r", "\n" );
+
+		// Check if field starts with a dangerous character.
+		foreach ( $dangerous_chars as $char ) {
+			if ( 0 === strpos( $field, $char ) ) {
+				// Prefix with single quote to prevent formula interpretation.
+				return "'" . $field;
+			}
+		}
+
+		return $field;
 	}
 
 	/**
