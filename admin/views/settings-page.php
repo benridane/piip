@@ -22,18 +22,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<?php
 		settings_fields( 'piip_settings_group' );
 		do_settings_sections( 'piip-settings' );
-		submit_button( __( 'Save Settings', 'piip' ) );
+		submit_button( __( 'Save Settings', 'piip-pii-protection' ) );
 		?>
 	</form>
 
 	<hr>
 
-	<h2><?php esc_html_e( 'Information', 'piip' ); ?></h2>
-	<p><?php esc_html_e( 'This plugin automatically masks personally identifiable information (PII) in WordPress comments and community plugin content before saving to the database.', 'piip' ); ?></p>
-	<p><?php esc_html_e( 'Supported integrations: WordPress Comments, wpForo, BuddyPress, bbPress', 'piip' ); ?></p>
+	<h2><?php esc_html_e( 'Information', 'piip-pii-protection' ); ?></h2>
+	<p><?php esc_html_e( 'This plugin automatically masks personally identifiable information (PII) in WordPress comments and community plugin content before saving to the database.', 'piip-pii-protection' ); ?></p>
+	<p><?php esc_html_e( 'Supported integrations: WordPress Comments, wpForo, BuddyPress, bbPress', 'piip-pii-protection' ); ?></p>
 	<p>
 		<a href="<?php echo esc_url( admin_url( 'admin.php?page=piip-logs' ) ); ?>" class="button">
-			<?php esc_html_e( 'View Masking Logs', 'piip' ); ?>
+			<?php esc_html_e( 'View Masking Logs', 'piip-pii-protection' ); ?>
 		</a>
 	</p>
 </div>

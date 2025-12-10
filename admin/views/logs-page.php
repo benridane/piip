@@ -21,14 +21,14 @@ $piip_export_url = wp_nonce_url(
 <div class="wrap">
 	<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
 
-	<p><?php esc_html_e( 'View all PII masking events logged by the plugin.', 'piip' ); ?></p>
+	<p><?php esc_html_e( 'View all PII masking events logged by the plugin.', 'piip-pii-protection' ); ?></p>
 
 	<p>
 		<a href="<?php echo esc_url( $piip_export_url ); ?>" class="button">
-			<?php esc_html_e( 'Export to CSV', 'piip' ); ?>
+			<?php esc_html_e( 'Export to CSV', 'piip-pii-protection' ); ?>
 		</a>
 		<a href="<?php echo esc_url( admin_url( 'options-general.php?page=piip-settings' ) ); ?>" class="button">
-			<?php esc_html_e( 'Settings', 'piip' ); ?>
+			<?php esc_html_e( 'Settings', 'piip-pii-protection' ); ?>
 		</a>
 	</p>
 

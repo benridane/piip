@@ -59,8 +59,8 @@ class PIIP_Admin_Logs {
 	 */
 	public function add_admin_menu() {
 		add_management_page(
-			__( 'PII Masking Logs', 'piip' ),
-			__( 'PII Masking Logs', 'piip' ),
+			__( 'PII Masking Logs', 'piip-pii-protection' ),
+			__( 'PII Masking Logs', 'piip-pii-protection' ),
 			'manage_options',
 			'piip-logs',
 			array( $this, 'render_logs_page' )
@@ -76,7 +76,7 @@ class PIIP_Admin_Logs {
 	 */
 	public function render_logs_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'piip' ) );
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'piip-pii-protection' ) );
 		}
 
 		$list_table = new PIIP_Logs_List_Table( $this->logger );
@@ -94,12 +94,12 @@ class PIIP_Admin_Logs {
 	 */
 	public function export_logs() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'piip' ) );
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'piip-pii-protection' ) );
 		}
 
 		// Verify nonce.
 		if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'piip_export_logs' ) ) {
-			wp_die( esc_html__( 'Security check failed.', 'piip' ) );
+			wp_die( esc_html__( 'Security check failed.', 'piip-pii-protection' ) );
 		}
 
 		$csv_content = $this->logger->export_to_csv();
@@ -164,13 +164,13 @@ class PIIP_Logs_List_Table extends WP_List_Table {
 	 */
 	public function get_columns() {
 		return array(
-			'id'           => __( 'ID', 'piip' ),
-			'created_at'   => __( 'Date', 'piip' ),
-			'form_type'    => __( 'Form Type', 'piip' ),
-			'form_id'      => __( 'Form ID', 'piip' ),
-			'field_name'   => __( 'Field Name', 'piip' ),
-			'pii_type'     => __( 'PII Type', 'piip' ),
-			'masked_value' => __( 'Masked Value', 'piip' ),
+			'id'           => __( 'ID', 'piip-pii-protection' ),
+			'created_at'   => __( 'Date', 'piip-pii-protection' ),
+			'form_type'    => __( 'Form Type', 'piip-pii-protection' ),
+			'form_id'      => __( 'Form ID', 'piip-pii-protection' ),
+			'field_name'   => __( 'Field Name', 'piip-pii-protection' ),
+			'pii_type'     => __( 'PII Type', 'piip-pii-protection' ),
+			'masked_value' => __( 'Masked Value', 'piip-pii-protection' ),
 		);
 	}
 
@@ -272,6 +272,6 @@ class PIIP_Logs_List_Table extends WP_List_Table {
 	 * @return void
 	 */
 	public function no_items() {
-		esc_html_e( 'No PII masking logs found.', 'piip' );
+		esc_html_e( 'No PII masking logs found.', 'piip-pii-protection' );
 	}
 }

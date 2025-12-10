@@ -54,25 +54,25 @@ class PIIP_Admin_Settings {
 		$this->available_integrations = array(
 			'comments'   => array(
 				'name'        => 'Comments',
-				'description' => __( 'Native WordPress comment system', 'piip' ),
+				'description' => __( 'Native WordPress comment system', 'piip-pii-protection' ),
 				'class'       => 'PIIP_Comments_Integration',
 				'check'       => array( 'PIIP_Comments_Integration', 'is_plugin_active' ),
 			),
 			'wpforo'     => array(
 				'name'        => 'wpForo',
-				'description' => __( 'Forum discussions and private messages', 'piip' ),
+				'description' => __( 'Forum discussions and private messages', 'piip-pii-protection' ),
 				'class'       => 'PIIP_wpForo_Integration',
 				'check'       => array( 'PIIP_wpForo_Integration', 'is_plugin_active' ),
 			),
 			'buddypress' => array(
 				'name'        => 'BuddyPress',
-				'description' => __( 'Activities, profiles, and messages', 'piip' ),
+				'description' => __( 'Activities, profiles, and messages', 'piip-pii-protection' ),
 				'class'       => 'PIIP_BuddyPress_Integration',
 				'check'       => array( 'PIIP_BuddyPress_Integration', 'is_plugin_active' ),
 			),
 			'bbpress'    => array(
 				'name'        => 'bbPress',
-				'description' => __( 'Forum topics and replies', 'piip' ),
+				'description' => __( 'Forum topics and replies', 'piip-pii-protection' ),
 				'class'       => 'PIIP_bbPress_Integration',
 				'check'       => array( 'PIIP_bbPress_Integration', 'is_plugin_active' ),
 			),
@@ -99,8 +99,8 @@ class PIIP_Admin_Settings {
 	 */
 	public function add_admin_menu() {
 		add_options_page(
-			__( 'PIIP Settings', 'piip' ),
-			__( 'PII Protection', 'piip' ),
+			__( 'PIIP Settings', 'piip-pii-protection' ),
+			__( 'PII Protection', 'piip-pii-protection' ),
 			'manage_options',
 			'piip-settings',
 			array( $this, 'render_settings_page' )
@@ -125,7 +125,7 @@ class PIIP_Admin_Settings {
 		// General settings section.
 		add_settings_section(
 			'piip_general_section',
-			__( 'General Settings', 'piip' ),
+			__( 'General Settings', 'piip-pii-protection' ),
 			array( $this, 'general_section_callback' ),
 			'piip-settings'
 		);
@@ -133,7 +133,7 @@ class PIIP_Admin_Settings {
 		// WordPress Core section.
 		add_settings_section(
 			'piip_wordpress_core_section',
-			__( 'Core', 'piip' ),
+			__( 'Core', 'piip-pii-protection' ),
 			array( $this, 'wordpress_core_section_callback' ),
 			'piip-settings'
 		);
@@ -141,7 +141,7 @@ class PIIP_Admin_Settings {
 		// Integrations section.
 		add_settings_section(
 			'piip_integrations_section',
-			__( 'Plugin Integrations', 'piip' ),
+			__( 'Plugin Integrations', 'piip-pii-protection' ),
 			array( $this, 'integrations_section_callback' ),
 			'piip-settings'
 		);
@@ -149,7 +149,7 @@ class PIIP_Admin_Settings {
 		// PII types section.
 		add_settings_section(
 			'piip_pii_types_section',
-			__( 'PII Types to Mask', 'piip' ),
+			__( 'PII Types to Mask', 'piip-pii-protection' ),
 			array( $this, 'pii_types_section_callback' ),
 			'piip-settings'
 		);
@@ -157,7 +157,7 @@ class PIIP_Admin_Settings {
 		// Logging section.
 		add_settings_section(
 			'piip_logging_section',
-			__( 'Logging Settings', 'piip' ),
+			__( 'Logging Settings', 'piip-pii-protection' ),
 			array( $this, 'logging_section_callback' ),
 			'piip-settings'
 		);
@@ -165,7 +165,7 @@ class PIIP_Admin_Settings {
 		// Consent phrases section.
 		add_settings_section(
 			'piip_consent_section',
-			__( 'Consent Opt-Out Phrases', 'piip' ),
+			__( 'Consent Opt-Out Phrases', 'piip-pii-protection' ),
 			array( $this, 'consent_section_callback' ),
 			'piip-settings'
 		);
@@ -189,13 +189,13 @@ class PIIP_Admin_Settings {
 	private function add_general_fields() {
 		add_settings_field(
 			'enable_masking',
-			__( 'Enable PII Masking', 'piip' ),
+			__( 'Enable PII Masking', 'piip-pii-protection' ),
 			array( $this, 'checkbox_field_callback' ),
 			'piip-settings',
 			'piip_general_section',
 			array(
 				'label_for'   => 'enable_masking',
-				'description' => __( 'Enable automatic PII masking globally', 'piip' ),
+				'description' => __( 'Enable automatic PII masking globally', 'piip-pii-protection' ),
 			)
 		);
 	}
@@ -264,13 +264,13 @@ class PIIP_Admin_Settings {
 	 */
 	private function add_pii_type_fields() {
 		$pii_types = array(
-			'email'    => __( 'Email Addresses', 'piip' ),
-			'phone'    => __( 'Phone Numbers', 'piip' ),
-			'address'  => __( 'Addresses', 'piip' ),
-			'card'     => __( 'Credit Card Numbers', 'piip' ),
-			'ssn'      => __( 'Social Security Numbers', 'piip' ),
-			'password' => __( 'Passwords', 'piip' ),
-			'token'    => __( 'Tokens/API Keys', 'piip' ),
+			'email'    => __( 'Email Addresses', 'piip-pii-protection' ),
+			'phone'    => __( 'Phone Numbers', 'piip-pii-protection' ),
+			'address'  => __( 'Addresses', 'piip-pii-protection' ),
+			'card'     => __( 'Credit Card Numbers', 'piip-pii-protection' ),
+			'ssn'      => __( 'Social Security Numbers', 'piip-pii-protection' ),
+			'password' => __( 'Passwords', 'piip-pii-protection' ),
+			'token'    => __( 'Tokens/API Keys', 'piip-pii-protection' ),
 		);
 
 		foreach ( $pii_types as $type => $label ) {
@@ -297,32 +297,32 @@ class PIIP_Admin_Settings {
 	private function add_logging_fields() {
 		add_settings_field(
 			'enable_logging',
-			__( 'Enable Logging', 'piip' ),
+			__( 'Enable Logging', 'piip-pii-protection' ),
 			array( $this, 'checkbox_field_callback' ),
 			'piip-settings',
 			'piip_logging_section',
 			array(
 				'label_for'   => 'enable_logging',
-				'description' => __( 'Log all PII masking events to database', 'piip' ),
+				'description' => __( 'Log all PII masking events to database', 'piip-pii-protection' ),
 			)
 		);
 
 		add_settings_field(
 			'log_retention_days',
-			__( 'Log Retention Period', 'piip' ),
+			__( 'Log Retention Period', 'piip-pii-protection' ),
 			array( $this, 'select_field_callback' ),
 			'piip-settings',
 			'piip_logging_section',
 			array(
 				'label_for'   => 'log_retention_days',
 				'options'     => array(
-					'30'  => __( '30 days', 'piip' ),
-					'60'  => __( '60 days', 'piip' ),
-					'90'  => __( '90 days (recommended)', 'piip' ),
-					'180' => __( '180 days', 'piip' ),
-					'365' => __( '1 year', 'piip' ),
+					'30'  => __( '30 days', 'piip-pii-protection' ),
+					'60'  => __( '60 days', 'piip-pii-protection' ),
+					'90'  => __( '90 days (recommended)', 'piip-pii-protection' ),
+					'180' => __( '180 days', 'piip-pii-protection' ),
+					'365' => __( '1 year', 'piip-pii-protection' ),
 				),
-				'description' => __( 'Automatically delete logs older than this period (GDPR compliance)', 'piip' ),
+				'description' => __( 'Automatically delete logs older than this period (GDPR compliance)', 'piip-pii-protection' ),
 			)
 		);
 	}
@@ -337,7 +337,7 @@ class PIIP_Admin_Settings {
 	private function add_consent_fields() {
 		add_settings_field(
 			'consent_phrases',
-			__( 'Consent Phrases', 'piip' ),
+			__( 'Consent Phrases', 'piip-pii-protection' ),
 			array( $this, 'consent_phrases_field_callback' ),
 			'piip-settings',
 			'piip_consent_section',
@@ -355,7 +355,7 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	public function general_section_callback() {
-		echo '<p>' . esc_html__( 'Configure general PII masking settings.', 'piip' ) . '</p>';
+		echo '<p>' . esc_html__( 'Configure general PII masking settings.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -366,7 +366,7 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	public function wordpress_core_section_callback() {
-		echo '<p>' . esc_html__( 'Enable PII masking for WordPress core features.', 'piip' ) . '</p>';
+		echo '<p>' . esc_html__( 'Enable PII masking for WordPress core features.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -377,7 +377,7 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	public function integrations_section_callback() {
-		echo '<p>' . esc_html__( 'Select which community plugins should have PII masking enabled. Only installed and active plugins can be enabled.', 'piip' ) . '</p>';
+		echo '<p>' . esc_html__( 'Select which community plugins should have PII masking enabled. Only installed and active plugins can be enabled.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -388,7 +388,7 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	public function pii_types_section_callback() {
-		echo '<p>' . esc_html__( 'Select which types of PII should be automatically masked.', 'piip' ) . '</p>';
+		echo '<p>' . esc_html__( 'Select which types of PII should be automatically masked.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -399,7 +399,7 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	public function logging_section_callback() {
-		echo '<p>' . esc_html__( 'Configure logging and data retention settings.', 'piip' ) . '</p>';
+		echo '<p>' . esc_html__( 'Configure logging and data retention settings.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -410,7 +410,7 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	public function consent_section_callback() {
-		echo '<p>' . esc_html__( 'When content contains one of these phrases, PII masking will be skipped. Users can include these phrases to share personal information publicly.', 'piip' ) . '</p>';
+		echo '<p>' . esc_html__( 'When content contains one of these phrases, PII masking will be skipped. Users can include these phrases to share personal information publicly.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -447,18 +447,18 @@ class PIIP_Admin_Settings {
 			if ( 'comments' === $slug ) {
 				printf(
 					'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
-					esc_html__( 'Available', 'piip' )
+					esc_html__( 'Available', 'piip-pii-protection' )
 				);
 			} else {
 				printf(
 					'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
-					esc_html__( 'Plugin Active', 'piip' )
+					esc_html__( 'Plugin Active', 'piip-pii-protection' )
 				);
 			}
 		} else {
 			printf(
 				'<span class="piip-status piip-status-inactive" style="color: #999; margin-left: 10px;">%s</span>',
-				esc_html__( 'Plugin Not Installed', 'piip' )
+				esc_html__( 'Plugin Not Installed', 'piip-pii-protection' )
 			);
 		}
 
@@ -589,7 +589,7 @@ class PIIP_Admin_Settings {
 				checked( $enabled, true, false ),
 				absint( $index ),
 				esc_attr( $phrase ),
-				esc_html__( 'Remove', 'piip' )
+				esc_html__( 'Remove', 'piip-pii-protection' )
 			);
 		}
 
@@ -597,10 +597,10 @@ class PIIP_Admin_Settings {
 
 		printf(
 			'<button type="button" id="piip-add-phrase" class="button" style="margin-top: 8px;">%s</button>',
-			esc_html__( '+ Add Phrase', 'piip' )
+			esc_html__( '+ Add Phrase', 'piip-pii-protection' )
 		);
 
-		echo '<p class="description">' . esc_html__( 'Check to enable a phrase. Uncheck to disable without removing.', 'piip' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Check to enable a phrase. Uncheck to disable without removing.', 'piip-pii-protection' ) . '</p>';
 
 		// JavaScript for add/remove functionality.
 		?>
@@ -611,8 +611,8 @@ class PIIP_Admin_Settings {
 			$('#piip-add-phrase').on('click', function() {
 				var newRow = '<div class="piip-phrase-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">' +
 					'<input type="checkbox" name="piip_settings[consent_phrases][' + phraseIndex + '][enabled]" value="1" checked>' +
-					'<input type="text" name="piip_settings[consent_phrases][' + phraseIndex + '][phrase]" value="" class="regular-text" style="flex: 1;" placeholder="<?php echo esc_js( __( 'Enter consent phrase...', 'piip' ) ); ?>">' +
-					'<button type="button" class="button piip-remove-phrase" style="color: #a00;"><?php echo esc_js( __( 'Remove', 'piip' ) ); ?></button>' +
+					'<input type="text" name="piip_settings[consent_phrases][' + phraseIndex + '][phrase]" value="" class="regular-text" style="flex: 1;" placeholder="<?php echo esc_js( __( 'Enter consent phrase...', 'piip-pii-protection' ) ); ?>">' +
+					'<button type="button" class="button piip-remove-phrase" style="color: #a00;"><?php echo esc_js( __( 'Remove', 'piip-pii-protection' ) ); ?></button>' +
 					'</div>';
 				$('#piip-consent-phrases').append(newRow);
 				phraseIndex++;
@@ -691,7 +691,7 @@ class PIIP_Admin_Settings {
 	 */
 	public function render_settings_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'piip' ) );
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'piip-pii-protection' ) );
 		}
 
 		require_once plugin_dir_path( __FILE__ ) . 'views/settings-page.php';
