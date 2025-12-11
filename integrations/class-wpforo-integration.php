@@ -1,6 +1,6 @@
 <?php
 /**
- * wpForo Integration
+ * WpForo Integration
  *
  * Integrates PII masking with wpForo forum plugin.
  *
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @since 1.0.0
  */
-class PIIP_wpForo_Integration extends PIIP_Base_Integration {
+class PIIP_WpForo_Integration extends PIIP_Base_Integration {
 
 	/**
 	 * Integration slug.

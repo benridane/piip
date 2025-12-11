@@ -326,7 +326,9 @@ class PIIP_PII_Masker {
 	 *
 	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
 	 */
-	public function mask_password( $password ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function mask_password( $password ) {
+		// Parameter preserved for interface compatibility.
+		unset( $password ); // Explicitly unset for security.
 		return '[REDACTED]';
 	}
 
@@ -522,9 +524,9 @@ class PIIP_PII_Masker {
 	private function mask_phones_in_text( $text ) {
 		// Japanese phone patterns.
 		$patterns = array(
-			// Japanese mobile: 090-1234-5678, 080-1234-5678, 070-1234-5678.
+			// Japanese mobile patterns: 090, 080, 070 numbers.
 			'/\b0[789]0[-\s]?\d{4}[-\s]?\d{4}\b/',
-			// Japanese landline: 03-1234-5678, 06-1234-5678.
+			// Japanese landline patterns: area code + number.
 			'/\b0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4}\b/',
 			// International format with +.
 			'/\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{2,4}\b/',

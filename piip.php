@@ -3,7 +3,7 @@
  * Plugin Name:       PIIP - PII Protection
  * Plugin URI:        https://benridane.com/piip
  * Description:       Automatically masks personally identifiable information (PII) in community plugins to protect user privacy.
- * Version:           0.2.0
+ * Version:           1.2.1
  * Requires at least: 6.9
  * Requires PHP:      8.2
  * Author:            Benridane
@@ -252,20 +252,20 @@ class PIIP_Plugin {
 
 		// Set default settings.
 		$default_settings = array(
-			'enable_masking'       => 1,
-			'mask_email'           => 1,
-			'mask_phone'           => 1,
-			'mask_address'         => 1,
-			'mask_card'            => 1,
-			'mask_ssn'             => 1,
-			'mask_password'        => 1,
-			'mask_token'           => 1,
-			'enable_logging'       => 1,
-			'log_retention_days'   => 90,
-			'integration_wpforo'   => 0,
+			'enable_masking'         => 1,
+			'mask_email'             => 1,
+			'mask_phone'             => 1,
+			'mask_address'           => 1,
+			'mask_card'              => 1,
+			'mask_ssn'               => 1,
+			'mask_password'          => 1,
+			'mask_token'             => 1,
+			'enable_logging'         => 1,
+			'log_retention_days'     => 90,
+			'integration_wpforo'     => 0,
 			'integration_buddypress' => 0,
-			'integration_bbpress' => 0,
-			'integration_comments' => 0,
+			'integration_bbpress'    => 0,
+			'integration_comments'   => 0,
 		);
 
 		add_option( 'piip_settings', $default_settings );

@@ -39,6 +39,7 @@ class PIIP_Admin_Settings {
 	public function __construct() {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 
 		$this->setup_available_integrations();
 	}
@@ -105,6 +106,47 @@ class PIIP_Admin_Settings {
 			'piip-settings',
 			array( $this, 'render_settings_page' )
 		);
+	}
+
+	/**
+	 * Enqueue admin scripts.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $hook_suffix The current admin page.
+	 * @return void
+	 */
+	public function enqueue_admin_scripts( $hook_suffix ) {
+		if ( 'settings_page_piip-settings' !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_script( 'jquery' );
+
+		$phrases = get_option( 'piip_settings', array() );
+		$phrases = isset( $phrases['consent_phrases'] ) ? $phrases['consent_phrases'] : array();
+
+		$script = '
+		jQuery(document).ready(function($) {
+			var phraseIndex = ' . count( $phrases ) . ";
+
+			$('#piip-add-phrase').on('click', function() {
+				var newRow = '<div class=\"piip-phrase-row\" style=\"margin-bottom: 8px; display: flex; align-items: center; gap: 8px;\">' +
+					'<input type=\"checkbox\" name=\"piip_settings[consent_phrases][' + phraseIndex + '][enabled]\" value=\"1\" checked>' +
+					'<input type=\"text\" name=\"piip_settings[consent_phrases][' + phraseIndex + '][phrase]\" value=\"\" class=\"regular-text\" style=\"flex: 1;\" placeholder=\"" . esc_js( __( 'Enter consent phrase...', 'piip-pii-protection' ) ) . "\">' +
+					'<button type=\"button\" class=\"button piip-remove-phrase\" style=\"color: #a00;\">" . esc_js( __( 'Remove', 'piip-pii-protection' ) ) . "</button>' +
+					'</div>';
+				$('#piip-consent-phrases').append(newRow);
+				phraseIndex++;
+			});
+
+			$(document).on('click', '.piip-remove-phrase', function() {
+				$(this).closest('.piip-phrase-row').remove();
+			});
+		});
+		";
+
+		wp_add_inline_script( 'jquery', $script );
 	}
 
 	/**
@@ -431,13 +473,13 @@ class PIIP_Admin_Settings {
 		$is_plugin_active = is_callable( $integration['check'] ) && call_user_func( $integration['check'] );
 		$is_enabled       = isset( $options[ $field_id ] ) && $options[ $field_id ];
 		$disabled         = $is_plugin_active ? '' : 'disabled';
-		$checked          = $is_enabled && $is_plugin_active ? 'checked="checked"' : '';
+		$checked_attr     = ( $is_enabled && $is_plugin_active ) ? 'checked="checked"' : '';
 
 		printf(
 			'<input type="checkbox" id="%s" name="piip_settings[%s]" value="1" %s %s>',
 			esc_attr( $field_id ),
 			esc_attr( $field_id ),
-			$checked, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- safe HTML attribute.
+			esc_attr( $checked_attr ),
 			esc_attr( $disabled )
 		);
 
@@ -482,14 +524,16 @@ class PIIP_Admin_Settings {
 		$checked = isset( $options[ $args['label_for'] ] ) ? checked( $options[ $args['label_for'] ], 1, false ) : '';
 
 		if ( ! isset( $options[ $args['label_for'] ] ) ) {
-			$checked = 'checked="checked"'; // Default to enabled.
+			$checked_attr = 'checked="checked"'; // Default to enabled.
+		} else {
+			$checked_attr = $options[ $args['label_for'] ] ? 'checked="checked"' : '';
 		}
 
 		printf(
 			'<input type="checkbox" id="%s" name="piip_settings[%s]" value="1" %s>',
 			esc_attr( $args['label_for'] ),
 			esc_attr( $args['label_for'] ),
-			$checked // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $checked is from checked() function which returns safe HTML attribute string.
+			esc_attr( $checked_attr )
 		);
 
 		if ( isset( $args['description'] ) ) {
@@ -547,7 +591,9 @@ class PIIP_Admin_Settings {
 	 *
 	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
 	 */
-	public function consent_phrases_field_callback( $args ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function consent_phrases_field_callback( $args ) {
+		// Parameter preserved for interface compatibility.
+		unset( $args ); // Explicitly unset unused parameter.
 		$options = get_option( 'piip_settings', array() );
 		$phrases = isset( $options['consent_phrases'] ) ? $options['consent_phrases'] : array();
 
@@ -601,29 +647,6 @@ class PIIP_Admin_Settings {
 		);
 
 		echo '<p class="description">' . esc_html__( 'Check to enable a phrase. Uncheck to disable without removing.', 'piip-pii-protection' ) . '</p>';
-
-		// JavaScript for add/remove functionality.
-		?>
-		<script>
-		jQuery(document).ready(function($) {
-			var phraseIndex = <?php echo count( $phrases ); ?>;
-
-			$('#piip-add-phrase').on('click', function() {
-				var newRow = '<div class="piip-phrase-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">' +
-					'<input type="checkbox" name="piip_settings[consent_phrases][' + phraseIndex + '][enabled]" value="1" checked>' +
-					'<input type="text" name="piip_settings[consent_phrases][' + phraseIndex + '][phrase]" value="" class="regular-text" style="flex: 1;" placeholder="<?php echo esc_js( __( 'Enter consent phrase...', 'piip-pii-protection' ) ); ?>">' +
-					'<button type="button" class="button piip-remove-phrase" style="color: #a00;"><?php echo esc_js( __( 'Remove', 'piip-pii-protection' ) ); ?></button>' +
-					'</div>';
-				$('#piip-consent-phrases').append(newRow);
-				phraseIndex++;
-			});
-
-			$(document).on('click', '.piip-remove-phrase', function() {
-				$(this).closest('.piip-phrase-row').remove();
-			});
-		});
-		</script>
-		<?php
 	}
 
 	/**
