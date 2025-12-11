@@ -7,8 +7,8 @@
 
 set -e
 
-# Plugin slug
-PLUGIN_SLUG="piip"
+# Plugin slug (should match text domain)
+PLUGIN_SLUG="piip-pii-protection"
 
 # Get the plugin root directory
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
