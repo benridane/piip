@@ -196,14 +196,6 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
-		// Logging section.
-		add_settings_section(
-			'piip_logging_section',
-			__( 'Logging Settings', 'piip-pii-protection' ),
-			array( $this, 'logging_section_callback' ),
-			'piip-settings'
-		);
-
 		// Consent phrases section.
 		add_settings_section(
 			'piip_consent_section',
@@ -217,7 +209,6 @@ class PIIP_Admin_Settings {
 		$this->add_wordpress_core_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
-		$this->add_logging_fields();
 		$this->add_consent_fields();
 	}
 
@@ -336,39 +327,6 @@ class PIIP_Admin_Settings {
 	 *
 	 * @return void
 	 */
-	private function add_logging_fields() {
-		add_settings_field(
-			'enable_logging',
-			__( 'Enable Logging', 'piip-pii-protection' ),
-			array( $this, 'checkbox_field_callback' ),
-			'piip-settings',
-			'piip_logging_section',
-			array(
-				'label_for'   => 'enable_logging',
-				'description' => __( 'Log all PII masking events to database', 'piip-pii-protection' ),
-			)
-		);
-
-		add_settings_field(
-			'log_retention_days',
-			__( 'Log Retention Period', 'piip-pii-protection' ),
-			array( $this, 'select_field_callback' ),
-			'piip-settings',
-			'piip_logging_section',
-			array(
-				'label_for'   => 'log_retention_days',
-				'options'     => array(
-					'30'  => __( '30 days', 'piip-pii-protection' ),
-					'60'  => __( '60 days', 'piip-pii-protection' ),
-					'90'  => __( '90 days (recommended)', 'piip-pii-protection' ),
-					'180' => __( '180 days', 'piip-pii-protection' ),
-					'365' => __( '1 year', 'piip-pii-protection' ),
-				),
-				'description' => __( 'Automatically delete logs older than this period (GDPR compliance)', 'piip-pii-protection' ),
-			)
-		);
-	}
-
 	/**
 	 * Add consent phrase fields.
 	 *
@@ -440,10 +398,6 @@ class PIIP_Admin_Settings {
 	 *
 	 * @return void
 	 */
-	public function logging_section_callback() {
-		echo '<p>' . esc_html__( 'Configure logging and data retention settings.', 'piip-pii-protection' ) . '</p>';
-	}
-
 	/**
 	 * Consent section callback.
 	 *
@@ -670,7 +624,6 @@ class PIIP_Admin_Settings {
 			'mask_ssn',
 			'mask_password',
 			'mask_token',
-			'enable_logging',
 		);
 
 		// Add integration checkboxes.
@@ -680,11 +633,6 @@ class PIIP_Admin_Settings {
 
 		foreach ( $checkboxes as $checkbox ) {
 			$sanitized[ $checkbox ] = isset( $input[ $checkbox ] ) ? 1 : 0;
-		}
-
-		// Sanitize log retention days.
-		if ( isset( $input['log_retention_days'] ) ) {
-			$sanitized['log_retention_days'] = absint( $input['log_retention_days'] );
 		}
 
 		// Sanitize consent phrases.

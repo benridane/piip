@@ -123,7 +123,6 @@ class PIIP_Plugin {
 		// Load admin classes.
 		if ( is_admin() ) {
 			require_once PIIP_PLUGIN_DIR . 'admin/class-admin-settings.php';
-			require_once PIIP_PLUGIN_DIR . 'admin/class-admin-logs.php';
 		}
 
 		// Load integration base class and integrations.
@@ -145,7 +144,7 @@ class PIIP_Plugin {
 		register_activation_hook( __FILE__, array( $this, 'activate' ) );
 		register_deactivation_hook( __FILE__, array( $this, 'deactivate' ) );
 
-		add_action( 'plugins_loaded', array( $this, 'init' ) );
+		add_action( 'init', array( $this, 'init' ) );
 	}
 
 	/**
@@ -165,7 +164,6 @@ class PIIP_Plugin {
 		// Initialize admin.
 		if ( is_admin() ) {
 			new PIIP_Admin_Settings();
-			new PIIP_Admin_Logs( $this->logger );
 		}
 
 		// Initialize community plugin integrations.
