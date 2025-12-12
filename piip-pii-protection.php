@@ -58,22 +58,6 @@ class PIIP_Plugin {
 	public $masker;
 
 	/**
-	 * PII Database instance.
-	 *
-	 * @since 1.0.0
-	 * @var PIIP_PII_Database
-	 */
-	public $database;
-
-	/**
-	 * PII Logger instance.
-	 *
-	 * @since 1.0.0
-	 * @var PIIP_PII_Logger
-	 */
-	public $logger;
-
-	/**
 	 * Active integrations.
 	 *
 	 * @since 1.0.0
@@ -117,8 +101,6 @@ class PIIP_Plugin {
 		// Load core classes.
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-detector.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-masker.php';
-		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-database.php';
-		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-logger.php';
 
 		// Load admin classes.
 		if ( is_admin() ) {
@@ -158,8 +140,6 @@ class PIIP_Plugin {
 		// Initialize core components.
 		$this->detector = new PIIP_PII_Detector();
 		$this->masker   = new PIIP_PII_Masker( $this->detector );
-		$this->database = new PIIP_PII_Database();
-		$this->logger   = new PIIP_PII_Logger( $this->database );
 
 		// Initialize admin.
 		if ( is_admin() ) {
@@ -221,7 +201,7 @@ class PIIP_Plugin {
 
 			// Initialize the integration.
 			$class_name                  = $integration['class'];
-			$this->integrations[ $slug ] = new $class_name( $this->masker, $this->logger, $this->detector );
+			$this->integrations[ $slug ] = new $class_name( $this->masker, $this->detector );
 		}
 	}
 
@@ -244,10 +224,6 @@ class PIIP_Plugin {
 	 * @return void
 	 */
 	public function activate() {
-		// Create database table.
-		$database = new PIIP_PII_Database();
-		$database->create_table();
-
 		// Set default settings.
 		$default_settings = array(
 			'enable_masking'         => 1,
@@ -258,19 +234,23 @@ class PIIP_Plugin {
 			'mask_ssn'               => 1,
 			'mask_password'          => 1,
 			'mask_token'             => 1,
-			'enable_logging'         => 1,
-			'log_retention_days'     => 90,
-			'integration_wpforo'     => 0,
-			'integration_buddypress' => 0,
-			'integration_bbpress'    => 0,
-			'integration_comments'   => 0,
+			'mask_ip'                => 1,
+			'mask_hosting_id'        => 1,
+			'integrations'           => array(
+				'comments'   => 1,
+				'wpforo'     => 0,
+				'buddypress' => 0,
+				'bbpress'    => 0,
+			),
+			'consent_phrases'        => array(
+				array(
+					'phrase'  => 'I consent to share my personal information',
+					'enabled' => 1,
+				),
+			),
 		);
 
 		add_option( 'piip_settings', $default_settings );
-
-		// Schedule cleanup cron.
-		$logger = new PIIP_PII_Logger( $database );
-		$logger->schedule_cleanup();
 
 		// Flush rewrite rules.
 		flush_rewrite_rules();
@@ -284,11 +264,6 @@ class PIIP_Plugin {
 	 * @return void
 	 */
 	public function deactivate() {
-		// Unschedule cleanup cron.
-		$database = new PIIP_PII_Database();
-		$logger   = new PIIP_PII_Logger( $database );
-		$logger->unschedule_cleanup();
-
 		// Flush rewrite rules.
 		flush_rewrite_rules();
 	}

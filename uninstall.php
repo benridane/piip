@@ -15,7 +15,6 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 // Delete options.
 delete_option( 'piip_settings' );
-delete_option( 'piip_db_version' );
 
 // Clear any cached data.
 wp_cache_flush();

@@ -48,14 +48,6 @@ abstract class PIIP_Base_Integration {
 	protected $masker;
 
 	/**
-	 * PII Logger instance.
-	 *
-	 * @since 1.0.0
-	 * @var PIIP_PII_Logger
-	 */
-	protected $logger;
-
-	/**
 	 * PII Detector instance.
 	 *
 	 * @since 1.0.0
@@ -69,12 +61,10 @@ abstract class PIIP_Base_Integration {
 	 * @since 1.0.0
 	 *
 	 * @param PIIP_PII_Masker   $masker   Masker instance.
-	 * @param PIIP_PII_Logger   $logger   Logger instance.
 	 * @param PIIP_PII_Detector $detector Detector instance.
 	 */
-	public function __construct( $masker, $logger, $detector ) {
+	public function __construct( $masker, $detector ) {
 		$this->masker   = $masker;
-		$this->logger   = $logger;
 		$this->detector = $detector;
 
 		$this->init_hooks();
@@ -228,18 +218,7 @@ abstract class PIIP_Base_Integration {
 	 * @return void
 	 */
 	protected function log_consent_event( $context, $item_id ) {
-		$this->logger->log_masking_event(
-			array(
-				'form_id'        => $item_id,
-				'form_type'      => $this->slug,
-				'field_name'     => $context,
-				'field_label'    => $context,
-				'pii_type'       => 'consent_optout',
-				'original_value' => '[CONSENT OPT-OUT]',
-				'masked_value'   => '[NOT MASKED - USER CONSENT]',
-				'masking_method' => 'consent_bypass',
-			)
-		);
+		// No logging for privacy protection.
 	}
 
 	/**
@@ -254,17 +233,6 @@ abstract class PIIP_Base_Integration {
 	 * @return void
 	 */
 	protected function log_masking_event( $context, $item_id, $original_value, $masked_value ) {
-		$this->logger->log_masking_event(
-			array(
-				'form_id'        => $item_id,
-				'form_type'      => $this->slug,
-				'field_name'     => $context,
-				'field_label'    => $context,
-				'pii_type'       => 'mixed',
-				'original_value' => $original_value,
-				'masked_value'   => $masked_value,
-				'masking_method' => 'server_side',
-			)
-		);
+		// No logging for privacy protection.
 	}
 }
