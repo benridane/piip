@@ -1,6 +1,6 @@
 <?php
 /**
- * bbPress Integration
+ * BbPress Integration
  *
  * Integrates PII masking with bbPress forum plugin.
  *
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @since 1.0.0
  */
-class PIIP_bbPress_Integration extends PIIP_Base_Integration {
+class PIIP_BbPress_Integration extends PIIP_Base_Integration {
 
 	/**
 	 * Integration slug.

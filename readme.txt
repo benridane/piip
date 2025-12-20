@@ -1,14 +1,14 @@
 === PIIP - PII Protection ===
-Contributors: benridane
+Contributors: benridane, presents111
 Tags: privacy, pii, gdpr, security, data-protection
-Requires at least: 6.0
+Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.2
-Stable tag: 0.2.0
+Stable tag: 1.2.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically masks personally identifiable information (PII) in WordPress comments and community plugin content to protect user privacy and comply with GDPR.
+Automatically detects and masks PII in WordPress comments and forms to protect user privacy and ensure GDPR compliance.
 
 == Description ==
 
@@ -22,8 +22,6 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * **Community Plugin Support**: Works seamlessly with wpForo, BuddyPress, bbPress, and other popular community plugins
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
 * **Consent Opt-Out**: Users can include consent phrases to skip masking when sharing personal info publicly
-* **Audit Trail**: Complete logging of all masking events with export to CSV
-* **GDPR Compliant**: Automatic log cleanup based on configurable retention period (30-365 days)
 * **Presidio-Level Detection**: High-accuracy detection with validation (Luhn for credit cards, check digits for My Number)
 
 = Supported PII Types =
@@ -36,7 +34,7 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * Passwords (masked to [REDACTED])
 * API Tokens/Keys (partial masking showing first and last 4 characters)
 * IP Addresses (192.168.1.1 → 192.***.***1)
-* Hosting Account IDs (Xserver, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
+* Hosting Account IDs (XServer, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
 
 = Supported Integrations =
 
@@ -54,15 +52,13 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 2. PIIP intercepts the submission before database save
 3. Automatically detects PII using field names, regex patterns, and validation
 4. Masks detected PII according to your settings
-5. Logs the masking event (optional)
-6. Content saves normally with masked data
+5. Content saves normally with masked data
 
 = Privacy & Security =
 
 * All processing happens on YOUR server (no external API calls)
-* Original values are NEVER stored (only SHA-256 hashes for audit purposes)
+* Original values are NEVER stored for maximum privacy protection
 * Server-side processing prevents client-side bypass attempts
-* Logs automatically deleted based on retention policy
 * Full control over your data
 
 == Installation ==
@@ -88,9 +84,8 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 2. Enable/disable desired integrations (Comments, wpForo, BuddyPress, bbPress)
 3. Select which PII types to mask
 4. Configure consent phrases for opt-out feature
-5. Configure log retention period (default: 90 days)
-6. Save settings
-7. Test with a post or comment to verify masking is working
+5. Save settings
+6. Test with a post or comment to verify masking is working
 
 == Frequently Asked Questions ==
 
@@ -122,26 +117,19 @@ No. All masking happens on the server (PHP), so it cannot be bypassed by disabli
 
 No. The original data is never stored. We only store:
 - The masked value
-- A SHA-256 hash of the original (for audit purposes, cannot be reversed)
-
-= How long are logs kept? =
-
-By default, logs are kept for 90 days. You can configure this in Settings → PII Protection to anywhere from 30 to 365 days.
 
 = Is this GDPR compliant? =
 
 Yes. PIIP helps with GDPR compliance by:
 - Minimizing data collection (masking PII)
-- Providing audit trails
-- Automatic data deletion based on retention policies
 - No third-party data sharing (everything stays on your server)
+- No detailed logging to protect user privacy
 
 == Screenshots ==
 
 1. Settings page - Configure integrations and PII types to mask
 2. Consent phrases configuration
-3. Masking logs - View audit trail of all masked submissions
-4. Example of masked content in forum post
+3. Example of masked content in forum post
 
 == Changelog ==
 
@@ -152,9 +140,8 @@ Yes. PIIP helps with GDPR compliance by:
 * wpForo, BuddyPress, bbPress integrations
 * Consent-based opt-out feature
 * Admin settings page
-* Masking logs with CSV export
-* Automatic log cleanup (GDPR compliance)
 * Hosting account ID detection (Japanese and international providers)
+* Privacy-focused design with no detailed logging
 * Note: Name masking excluded due to accuracy limitations
 
 == Upgrade Notice ==
@@ -172,8 +159,7 @@ PIIP - PII Protection does NOT:
 
 PIIP DOES:
 * Process content locally on your server
-* Store masked PII and audit logs in your database
-* Automatically delete logs after the configured retention period
+* Automatically mask PII without storing sensitive data
 
 == Support ==
 

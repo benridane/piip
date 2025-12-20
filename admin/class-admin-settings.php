@@ -39,6 +39,7 @@ class PIIP_Admin_Settings {
 	public function __construct() {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
 
 		$this->setup_available_integrations();
 	}
@@ -108,6 +109,47 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Enqueue admin scripts.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $hook_suffix The current admin page.
+	 * @return void
+	 */
+	public function enqueue_admin_scripts( $hook_suffix ) {
+		if ( 'settings_page_piip-settings' !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_script( 'jquery' );
+
+		$phrases = get_option( 'piip_settings', array() );
+		$phrases = isset( $phrases['consent_phrases'] ) ? $phrases['consent_phrases'] : array();
+
+		$script = '
+		jQuery(document).ready(function($) {
+			var phraseIndex = ' . count( $phrases ) . ";
+
+			$('#piip-add-phrase').on('click', function() {
+				var newRow = '<div class=\"piip-phrase-row\" style=\"margin-bottom: 8px; display: flex; align-items: center; gap: 8px;\">' +
+					'<input type=\"checkbox\" name=\"piip_settings[consent_phrases][' + phraseIndex + '][enabled]\" value=\"1\" checked>' +
+					'<input type=\"text\" name=\"piip_settings[consent_phrases][' + phraseIndex + '][phrase]\" value=\"\" class=\"regular-text\" style=\"flex: 1;\" placeholder=\"" . esc_js( __( 'Enter consent phrase...', 'piip-pii-protection' ) ) . "\">' +
+					'<button type=\"button\" class=\"button piip-remove-phrase\" style=\"color: #a00;\">" . esc_js( __( 'Remove', 'piip-pii-protection' ) ) . "</button>' +
+					'</div>';
+				$('#piip-consent-phrases').append(newRow);
+				phraseIndex++;
+			});
+
+			$(document).on('click', '.piip-remove-phrase', function() {
+				$(this).closest('.piip-phrase-row').remove();
+			});
+		});
+		";
+
+		wp_add_inline_script( 'jquery', $script );
+	}
+
+	/**
 	 * Register settings.
 	 *
 	 * @since 1.0.0
@@ -154,14 +196,6 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
-		// Logging section.
-		add_settings_section(
-			'piip_logging_section',
-			__( 'Logging Settings', 'piip-pii-protection' ),
-			array( $this, 'logging_section_callback' ),
-			'piip-settings'
-		);
-
 		// Consent phrases section.
 		add_settings_section(
 			'piip_consent_section',
@@ -175,7 +209,6 @@ class PIIP_Admin_Settings {
 		$this->add_wordpress_core_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
-		$this->add_logging_fields();
 		$this->add_consent_fields();
 	}
 
@@ -294,39 +327,6 @@ class PIIP_Admin_Settings {
 	 *
 	 * @return void
 	 */
-	private function add_logging_fields() {
-		add_settings_field(
-			'enable_logging',
-			__( 'Enable Logging', 'piip-pii-protection' ),
-			array( $this, 'checkbox_field_callback' ),
-			'piip-settings',
-			'piip_logging_section',
-			array(
-				'label_for'   => 'enable_logging',
-				'description' => __( 'Log all PII masking events to database', 'piip-pii-protection' ),
-			)
-		);
-
-		add_settings_field(
-			'log_retention_days',
-			__( 'Log Retention Period', 'piip-pii-protection' ),
-			array( $this, 'select_field_callback' ),
-			'piip-settings',
-			'piip_logging_section',
-			array(
-				'label_for'   => 'log_retention_days',
-				'options'     => array(
-					'30'  => __( '30 days', 'piip-pii-protection' ),
-					'60'  => __( '60 days', 'piip-pii-protection' ),
-					'90'  => __( '90 days (recommended)', 'piip-pii-protection' ),
-					'180' => __( '180 days', 'piip-pii-protection' ),
-					'365' => __( '1 year', 'piip-pii-protection' ),
-				),
-				'description' => __( 'Automatically delete logs older than this period (GDPR compliance)', 'piip-pii-protection' ),
-			)
-		);
-	}
-
 	/**
 	 * Add consent phrase fields.
 	 *
@@ -398,10 +398,6 @@ class PIIP_Admin_Settings {
 	 *
 	 * @return void
 	 */
-	public function logging_section_callback() {
-		echo '<p>' . esc_html__( 'Configure logging and data retention settings.', 'piip-pii-protection' ) . '</p>';
-	}
-
 	/**
 	 * Consent section callback.
 	 *
@@ -431,13 +427,13 @@ class PIIP_Admin_Settings {
 		$is_plugin_active = is_callable( $integration['check'] ) && call_user_func( $integration['check'] );
 		$is_enabled       = isset( $options[ $field_id ] ) && $options[ $field_id ];
 		$disabled         = $is_plugin_active ? '' : 'disabled';
-		$checked          = $is_enabled && $is_plugin_active ? 'checked="checked"' : '';
+		$checked_attr     = ( $is_enabled && $is_plugin_active ) ? 'checked="checked"' : '';
 
 		printf(
 			'<input type="checkbox" id="%s" name="piip_settings[%s]" value="1" %s %s>',
 			esc_attr( $field_id ),
 			esc_attr( $field_id ),
-			$checked, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- safe HTML attribute.
+			esc_attr( $checked_attr ),
 			esc_attr( $disabled )
 		);
 
@@ -482,14 +478,16 @@ class PIIP_Admin_Settings {
 		$checked = isset( $options[ $args['label_for'] ] ) ? checked( $options[ $args['label_for'] ], 1, false ) : '';
 
 		if ( ! isset( $options[ $args['label_for'] ] ) ) {
-			$checked = 'checked="checked"'; // Default to enabled.
+			$checked_attr = 'checked="checked"'; // Default to enabled.
+		} else {
+			$checked_attr = $options[ $args['label_for'] ] ? 'checked="checked"' : '';
 		}
 
 		printf(
 			'<input type="checkbox" id="%s" name="piip_settings[%s]" value="1" %s>',
 			esc_attr( $args['label_for'] ),
 			esc_attr( $args['label_for'] ),
-			$checked // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $checked is from checked() function which returns safe HTML attribute string.
+			esc_attr( $checked_attr )
 		);
 
 		if ( isset( $args['description'] ) ) {
@@ -547,7 +545,9 @@ class PIIP_Admin_Settings {
 	 *
 	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
 	 */
-	public function consent_phrases_field_callback( $args ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+	public function consent_phrases_field_callback( $args ) {
+		// Parameter preserved for interface compatibility.
+		unset( $args ); // Explicitly unset unused parameter.
 		$options = get_option( 'piip_settings', array() );
 		$phrases = isset( $options['consent_phrases'] ) ? $options['consent_phrases'] : array();
 
@@ -601,29 +601,6 @@ class PIIP_Admin_Settings {
 		);
 
 		echo '<p class="description">' . esc_html__( 'Check to enable a phrase. Uncheck to disable without removing.', 'piip-pii-protection' ) . '</p>';
-
-		// JavaScript for add/remove functionality.
-		?>
-		<script>
-		jQuery(document).ready(function($) {
-			var phraseIndex = <?php echo count( $phrases ); ?>;
-
-			$('#piip-add-phrase').on('click', function() {
-				var newRow = '<div class="piip-phrase-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">' +
-					'<input type="checkbox" name="piip_settings[consent_phrases][' + phraseIndex + '][enabled]" value="1" checked>' +
-					'<input type="text" name="piip_settings[consent_phrases][' + phraseIndex + '][phrase]" value="" class="regular-text" style="flex: 1;" placeholder="<?php echo esc_js( __( 'Enter consent phrase...', 'piip-pii-protection' ) ); ?>">' +
-					'<button type="button" class="button piip-remove-phrase" style="color: #a00;"><?php echo esc_js( __( 'Remove', 'piip-pii-protection' ) ); ?></button>' +
-					'</div>';
-				$('#piip-consent-phrases').append(newRow);
-				phraseIndex++;
-			});
-
-			$(document).on('click', '.piip-remove-phrase', function() {
-				$(this).closest('.piip-phrase-row').remove();
-			});
-		});
-		</script>
-		<?php
 	}
 
 	/**
@@ -647,7 +624,6 @@ class PIIP_Admin_Settings {
 			'mask_ssn',
 			'mask_password',
 			'mask_token',
-			'enable_logging',
 		);
 
 		// Add integration checkboxes.
@@ -657,11 +633,6 @@ class PIIP_Admin_Settings {
 
 		foreach ( $checkboxes as $checkbox ) {
 			$sanitized[ $checkbox ] = isset( $input[ $checkbox ] ) ? 1 : 0;
-		}
-
-		// Sanitize log retention days.
-		if ( isset( $input['log_retention_days'] ) ) {
-			$sanitized['log_retention_days'] = absint( $input['log_retention_days'] );
 		}
 
 		// Sanitize consent phrases.

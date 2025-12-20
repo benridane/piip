@@ -7,15 +7,15 @@
 
 set -e
 
-# Plugin slug
-PLUGIN_SLUG="piip"
+# Plugin slug (should match text domain)
+PLUGIN_SLUG="piip-pii-protection"
 
 # Get the plugin root directory
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Get version from piip.php if not provided
+# Get version from main plugin file if not provided
 if [ -z "$1" ]; then
-    VERSION=$(grep -oP "Version:\s*\K[0-9.]+" "$PLUGIN_DIR/piip.php")
+    VERSION=$(grep -oP "Version:\s*\K[0-9.]+" "$PLUGIN_DIR/piip-pii-protection.php")
 else
     VERSION="$1"
 fi
