@@ -78,6 +78,18 @@ class PIIP_Admin_Settings {
 				'check'       => array( 'PIIP_bbPress_Integration', 'is_plugin_active' ),
 			),
 		);
+
+		/**
+		 * Filter available integrations for admin settings.
+		 *
+		 * Allows third-party developers to add custom integrations to the settings page.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param array $available_integrations Array of integration configurations.
+		 *                                      Each integration should have 'name', 'description', 'class', and 'check' keys.
+		 */
+		$this->available_integrations = apply_filters( 'piip_admin_available_integrations', $this->available_integrations );
 	}
 
 	/**

@@ -26,6 +26,7 @@ Makefile
 PHPCS-VALIDATION.md
 CONTRIBUTING.md
 CHANGELOG.md
+CUSTOM-HOOKS.md
 
 # IDE / Editor
 .idea/

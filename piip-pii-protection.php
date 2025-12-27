@@ -185,6 +185,18 @@ class PIIP_Plugin {
 			),
 		);
 
+		/**
+		 * Filter available integrations.
+		 *
+		 * Allows third-party developers to register custom integrations.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param array $available_integrations Array of integration configurations.
+		 *                                      Each integration should have 'class' and 'check' keys.
+		 */
+		$available_integrations = apply_filters( 'piip_available_integrations', $available_integrations );
+
 		// Initialize enabled integrations.
 		foreach ( $available_integrations as $slug => $integration ) {
 			$setting_key = 'integration_' . $slug;
@@ -199,9 +211,18 @@ class PIIP_Plugin {
 				continue;
 			}
 
+			// Allow custom integration initialization.
+			$custom_instance = apply_filters( 'piip_custom_integration_instance', null, $slug, $integration );
+			if ( null !== $custom_instance ) {
+				$this->integrations[ $slug ] = $custom_instance;
+				continue;
+			}
+
 			// Initialize the integration.
-			$class_name                  = $integration['class'];
-			$this->integrations[ $slug ] = new $class_name( $this->masker, $this->detector );
+			$class_name = $integration['class'];
+			if ( class_exists( $class_name ) ) {
+				$this->integrations[ $slug ] = new $class_name( $this->masker, $this->detector );
+			}
 		}
 	}
 
@@ -282,5 +303,23 @@ function piip() {
 	return PIIP_Plugin::get_instance();
 }
 // phpcs:enable Universal.Files.SeparateFunctionsFromOO.Mixed
+
+/**
+ * Mask text content using PIIP.
+ *
+ * Convenience function for simple text masking.
+ *
+ * @since 1.2.2
+ *
+ * @param string $text The text content to mask.
+ * @return string Masked text content.
+ */
+function piip_mask_text( $text ) {
+	$plugin = piip();
+	if ( isset( $plugin->masker ) ) {
+		return $plugin->masker->mask_text_simple( $text );
+	}
+	return $text;
+}
 
 piip();
