@@ -28,6 +28,9 @@ CONTRIBUTING.md
 CHANGELOG.md
 CUSTOM-HOOKS.md
 
+# Test plugins (dev only)
+testplugins/
+
 # IDE / Editor
 .idea/
 .vscode/
