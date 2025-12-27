@@ -4,7 +4,7 @@ Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.2
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -132,6 +132,18 @@ Yes. PIIP helps with GDPR compliance by:
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.3.0 - 2025-12-27 =
+* **Major Feature**: Added comprehensive custom hook system for developers
+* **New**: 18 filter hooks for custom PII detection and masking
+* **New**: 4 action hooks for logging and compliance tracking
+* **New**: `piip_mask_text()` global function for simple text masking
+* **New**: Dynamic integration registration for community plugins
+* **New**: Custom PII type detection and masking capabilities
+* **Enhanced**: Form data processing with before/after hooks
+* **Enhanced**: Integration system now supports third-party extensions
+* **Developer**: Complete hook documentation and examples included
+* **Tested**: Comprehensive test plugins for hook validation
 
 = 0.2.0 - 2025-12-01 =
 * Initial release
