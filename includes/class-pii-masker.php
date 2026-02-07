@@ -64,6 +64,30 @@ class PIIP_PII_Masker {
 			return $data;
 		}
 
+		/**
+		 * Filter form data before masking.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param array $data The form data array.
+		 */
+		$data = apply_filters( 'piip_before_mask_form_data', $data );
+
+		// Allow complete custom override of form data masking.
+		$custom_masked = apply_filters( 'piip_custom_mask_form_data', null, $data );
+		if ( null !== $custom_masked ) {
+			/**
+			 * Action fired when custom form data masking is applied.
+			 *
+			 * @since 1.2.2
+			 *
+			 * @param array $original_data The original form data.
+			 * @param array $masked_data   The masked form data.
+			 */
+			do_action( 'piip_form_data_masked', $data, $custom_masked );
+			return $custom_masked;
+		}
+
 		$masked_data = array();
 
 		foreach ( $data as $field_name => $value ) {
@@ -83,7 +107,99 @@ class PIIP_PII_Masker {
 			$masked_data[ $field_name ] = $this->mask_value( $field_name, $value );
 		}
 
+		/**
+		 * Filter form data after masking.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param array $masked_data   The masked form data.
+		 * @param array $original_data The original form data.
+		 */
+		$masked_data = apply_filters( 'piip_after_mask_form_data', $masked_data, $data );
+
+		/**
+		 * Action fired after form data masking is complete.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param array $original_data The original form data.
+		 * @param array $masked_data   The masked form data.
+		 */
+		do_action( 'piip_form_data_masked', $data, $masked_data );
+
 		return $masked_data;
+	}
+
+	/**
+	 * Mask text content without field name context.
+	 *
+	 * Simple method for masking any text content, useful for custom implementations.
+	 *
+	 * @since 1.2.2
+	 *
+	 * @param string $text The text content to mask.
+	 * @return string Masked text content.
+	 */
+	public function mask_text_simple( $text ) {
+		if ( ! is_string( $text ) || empty( $text ) ) {
+			return $text;
+		}
+
+		/**
+		 * Filter to allow complete custom override of simple text masking.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string|null $custom_result Custom masking result, null to use default logic.
+		 * @param string      $text          The original text.
+		 */
+		$custom_result = apply_filters( 'piip_custom_mask_text', null, $text );
+		if ( null !== $custom_result ) {
+			/**
+			 * Action fired when custom text masking is applied.
+			 *
+			 * @since 1.2.2
+			 *
+			 * @param string $original_text The original text.
+			 * @param string $masked_text   The masked text.
+			 */
+			do_action( 'piip_text_masked', $text, $custom_result );
+			return $custom_result;
+		}
+
+		/**
+		 * Filter text before PII detection and masking.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $text The text to be processed.
+		 */
+		$text = apply_filters( 'piip_before_mask_text', $text );
+
+		// Use the existing mask_text method for content-based masking
+		$masked_text = $this->mask_text( $text );
+
+		/**
+		 * Filter text after PII masking.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $masked_text   The masked text.
+		 * @param string $original_text The original text.
+		 */
+		$masked_text = apply_filters( 'piip_after_mask_text', $masked_text, $text );
+
+		/**
+		 * Action fired after text masking is complete.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $original_text The original text.
+		 * @param string $masked_text   The masked text.
+		 */
+		do_action( 'piip_text_masked', $text, $masked_text );
+
+		return $masked_text;
 	}
 
 	/**
@@ -106,15 +222,122 @@ class PIIP_PII_Masker {
 			return $value;
 		}
 
+		/**
+		 * Filter to allow custom pre-processing before PII detection.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $value      The field value.
+		 * @param string $field_name The field name.
+		 */
+		$value = apply_filters( 'piip_before_mask_value', $value, $field_name );
+
+		// Allow complete custom override of masking logic.
+		$custom_masked = apply_filters( 'piip_custom_mask_value', null, $value, $field_name );
+		if ( null !== $custom_masked ) {
+			/**
+			 * Action fired when custom masking is applied.
+			 *
+			 * @since 1.2.2
+			 *
+			 * @param string $original_value The original value.
+			 * @param string $masked_value   The masked value.
+			 * @param string $field_name     The field name.
+			 * @param string $pii_type       The detected PII type.
+			 */
+			do_action( 'piip_value_masked', $value, $custom_masked, $field_name, 'custom' );
+			return $custom_masked;
+		}
+
 		// Detect PII type.
 		$pii_type = $this->detector->detect_pii_type( $field_name, $value );
+
+		/**
+		 * Filter the detected PII type.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string|null $pii_type   The detected PII type or null.
+		 * @param string      $value      The field value.
+		 * @param string      $field_name The field name.
+		 */
+		$pii_type = apply_filters( 'piip_detected_pii_type', $pii_type, $value, $field_name );
 
 		// Check if this PII type should be masked based on settings.
 		if ( ! $this->should_mask_type( $pii_type ) ) {
 			return $value;
 		}
 
-		// Mask based on type.
+		// Check consent phrases (user opted out).
+		if ( $this->has_consent_phrase( $value ) ) {
+			/**
+			 * Action fired when user consent bypasses masking.
+			 *
+			 * @since 1.2.2
+			 *
+			 * @param string $value      The field value.
+			 * @param string $field_name The field name.
+			 * @param string $pii_type   The detected PII type.
+			 */
+			do_action( 'piip_consent_bypass', $value, $field_name, $pii_type );
+			return $value;
+		}
+
+		// Apply masking based on type.
+		$masked_value = $this->apply_masking_by_type( $pii_type, $value );
+
+		/**
+		 * Filter the masked value before returning.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $masked_value   The masked value.
+		 * @param string $original_value The original value.
+		 * @param string $field_name     The field name.
+		 * @param string $pii_type       The detected PII type.
+		 */
+		$masked_value = apply_filters( 'piip_after_mask_value', $masked_value, $value, $field_name, $pii_type );
+
+		/**
+		 * Action fired after successful masking.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $original_value The original value.
+		 * @param string $masked_value   The masked value.
+		 * @param string $field_name     The field name.
+		 * @param string $pii_type       The detected PII type.
+		 */
+		do_action( 'piip_value_masked', $value, $masked_value, $field_name, $pii_type );
+
+		return $masked_value;
+	}
+
+	/**
+	 * Apply masking based on PII type.
+	 *
+	 * @since 1.2.2
+	 *
+	 * @param string $pii_type The detected PII type.
+	 * @param string $value    The value to mask.
+	 * @return string Masked value.
+	 */
+	private function apply_masking_by_type( $pii_type, $value ) {
+		/**
+		 * Filter to allow custom masking for specific PII types.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string|null $custom_result Custom masking result, null to use default.
+		 * @param string      $pii_type      The PII type.
+		 * @param string      $value         The original value.
+		 */
+		$custom_result = apply_filters( 'piip_custom_mask_by_type', null, $pii_type, $value );
+		if ( null !== $custom_result ) {
+			return $custom_result;
+		}
+
+		// Default masking logic.
 		switch ( $pii_type ) {
 			case 'email':
 				return $this->mask_email( $value );
@@ -146,6 +369,37 @@ class PIIP_PII_Masker {
 			default:
 				return $value;
 		}
+	}
+
+	/**
+	 * Check if value contains consent phrase.
+	 *
+	 * @since 1.2.2
+	 *
+	 * @param string $value The value to check.
+	 * @return bool True if consent phrase found, false otherwise.
+	 */
+	private function has_consent_phrase( $value ) {
+		$consent_phrases = $this->settings['consent_phrases'] ?? array();
+		
+		if ( empty( $consent_phrases ) || ! is_array( $consent_phrases ) ) {
+			return false;
+		}
+
+		$value_lower = strtolower( $value );
+
+		foreach ( $consent_phrases as $phrase_config ) {
+			if ( empty( $phrase_config['enabled'] ) || empty( $phrase_config['phrase'] ) ) {
+				continue;
+			}
+
+			$phrase_lower = strtolower( $phrase_config['phrase'] );
+			if ( false !== strpos( $value_lower, $phrase_lower ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

@@ -331,14 +331,53 @@ class PIIP_PII_Detector {
 			return null;
 		}
 
+		/**
+		 * Filter to allow custom pre-processing before PII detection.
+		 *
+		 * @since 1.2.2
+		 *
+		 * @param string $field_value The field value.
+		 * @param string $field_name  The field name.
+		 */
+		$field_value = apply_filters( 'piip_before_detect_pii', $field_value, $field_name );
+
+		// Allow complete custom override of PII detection.
+		$custom_type = apply_filters( 'piip_custom_detect_pii_type', null, $field_name, $field_value );
+		if ( null !== $custom_type ) {
+			return $custom_type;
+		}
+
 		// First, check field name patterns (high confidence).
 		$type = $this->detect_by_field_name( $field_name );
 		if ( $type ) {
-			return $type;
+			/**
+			 * Filter the PII type detected by field name.
+			 *
+			 * @since 1.2.2
+			 *
+			 * @param string $type        The detected PII type.
+			 * @param string $field_name  The field name.
+			 * @param string $field_value The field value.
+			 */
+			return apply_filters( 'piip_detected_pii_by_field_name', $type, $field_name, $field_value );
 		}
 
 		// Second, check value patterns.
-		return $this->detect_by_value( $field_value );
+		$type = $this->detect_by_value( $field_value );
+		if ( $type ) {
+			/**
+			 * Filter the PII type detected by field value.
+			 *
+			 * @since 1.2.2
+			 *
+			 * @param string $type        The detected PII type.
+			 * @param string $field_name  The field name.
+			 * @param string $field_value The field value.
+			 */
+			return apply_filters( 'piip_detected_pii_by_value', $type, $field_name, $field_value );
+		}
+
+		return null;
 	}
 
 	/**
