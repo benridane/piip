@@ -315,7 +315,7 @@ class PIIP_Admin_Settings {
 			'card'     => __( 'Credit Card Numbers', 'piip-pii-protection' ),
 			'ssn'      => __( 'Social Security Numbers', 'piip-pii-protection' ),
 			'password' => __( 'Passwords', 'piip-pii-protection' ),
-			'token'    => __( 'Tokens/API Keys', 'piip-pii-protection' ),
+			'token'    => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
 		);
 
 		foreach ( $pii_types as $type => $label ) {

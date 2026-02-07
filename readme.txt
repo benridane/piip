@@ -4,7 +4,7 @@ Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.2
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,6 +33,7 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * Social Security Numbers / Japanese My Number with check digit validation
 * Passwords (masked to [REDACTED])
 * API Tokens/Keys (partial masking showing first and last 4 characters)
+* AI API Keys (OpenAI sk-***, Anthropic sk-ant-***, Google AIza***, Hugging Face hf_***, Replicate r8_***, Cohere, Azure OpenAI)
 * IP Addresses (192.168.1.1 → 192.***.***1)
 * Hosting Account IDs (XServer, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
 
@@ -132,6 +133,16 @@ Yes. PIIP helps with GDPR compliance by:
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.4.0 - 2026-02-07 =
+* **New Feature**: AI API Key Detection and Masking
+* **Added**: Support for 10 AI service providers (OpenAI, Anthropic Claude, Google AI, Hugging Face, Replicate, Cohere, Azure OpenAI, and more)
+* **Added**: Automatic detection of AI API keys in comments and form submissions
+* **Added**: Pattern-based detection for sk-, sk-proj-, sk-ant-, AIza, hf_, r8_ prefixed keys
+* **Enhanced**: Token masking now includes AI-specific key patterns
+* **Enhanced**: Comment integration now masks AI API keys in text content
+* **Security**: Prevents accidental exposure of AI API credentials in public content
+* **Tested**: 100% test coverage with 35 test cases across 3 test suites
 
 = 1.3.0 - 2025-12-27 =
 * **Major Feature**: Added comprehensive custom hook system for developers

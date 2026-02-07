@@ -740,6 +740,11 @@ class PIIP_PII_Masker {
 			$text = $this->mask_hosting_ids_in_text( $text );
 		}
 
+		// Mask AI API keys and tokens.
+		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_ai_keys_in_text( $text );
+		}
+
 		return $text;
 	}
 
@@ -1002,6 +1007,64 @@ class PIIP_PII_Masker {
 			return $parts[0] . '.***.***.' . $parts[3];
 		}
 		return '***.***.***.***';
+	}
+
+	/**
+	 * Mask AI API keys found in text.
+	 *
+	 * Detects and masks various AI service API keys:
+	 * - OpenAI: sk-, sk-proj-
+	 * - Anthropic Claude: sk-ant-
+	 * - Google AI: AIza
+	 * - Hugging Face: hf_
+	 * - Replicate: r8_
+	 * - Cohere: -*co
+	 * - Azure OpenAI: 32-char hex
+	 * - Generic: sk-, ai-, api-
+	 *
+	 * @since 1.2.1
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with AI API keys masked.
+	 */
+	private function mask_ai_keys_in_text( $text ) {
+		// AI API key patterns (same as in detector class).
+		$patterns = array(
+			// OpenAI: sk- or sk-proj- followed by alphanumeric.
+			'/\bsk-proj-[A-Za-z0-9]{40,}\b/',
+			'/\bsk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}\b/',
+			'/\bsk-[A-Za-z0-9]{48}\b/',
+			// Anthropic Claude: sk-ant- followed by alphanumeric/dashes.
+			'/\bsk-ant-[A-Za-z0-9_-]{95,100}\b/',
+			// Google AI Studio: AIza followed by alphanumeric/dashes (at least 30 chars total).
+			'/\bAIza[A-Za-z0-9_-]{30,}\b/',
+			// Hugging Face: hf_ followed by alphanumeric.
+			'/\bhf_[A-Za-z0-9]{30,}\b/',
+			// Replicate: r8_ followed by alphanumeric.
+			'/\br8_[A-Za-z0-9]{30,}\b/',
+			// Cohere: ends with -co (at least 30 chars total).
+			'/\b[A-Za-z0-9]{30,}-co\b/',
+			// Azure OpenAI: 32-character hex string.
+			'/\b[a-fA-F0-9]{32}\b/',
+			// Generic AI API keys: sk-, ai-, api- followed by alphanumeric.
+			'/\b(?:sk|ai|api)-[A-Za-z0-9_-]{20,}\b/',
+		);
+
+		foreach ( $patterns as $pattern ) {
+			$text = preg_replace_callback(
+				$pattern,
+				function ( $matches ) {
+					// Verify it's actually an AI key using the detector.
+					if ( $this->detector->is_ai_key( $matches[0] ) ) {
+						return $this->mask_token( $matches[0] );
+					}
+					return $matches[0];
+				},
+				$text
+			);
+		}
+
+		return $text;
 	}
 
 	/**

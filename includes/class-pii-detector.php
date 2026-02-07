@@ -132,8 +132,18 @@ class PIIP_PII_Detector {
 			'apikey',
 			'api_key',
 			'access_token',
+			'openai',
+			'claude',
+			'anthropic',
+			'gemini',
+			'cohere',
+			'huggingface',
+			'replicate',
+			'ai_key',
+			'ai_token',
 			'トークン',
 			'APIキー',
+			'AIキー',
 		),
 		'dob'      => array(
 			'dob',
@@ -317,6 +327,33 @@ class PIIP_PII_Detector {
 	);
 
 	/**
+	 * AI API key patterns for various providers.
+	 *
+	 * @since 1.2.2
+	 * @var array
+	 */
+	private $ai_key_patterns = array(
+		// OpenAI API keys: sk-... (various lengths)
+		'openai_legacy'   => '/\bsk-[A-Za-z0-9]{20,100}\b/',
+		// OpenAI API keys: new format with project prefix
+		'openai_project'  => '/\bsk-proj-[A-Za-z0-9]{20,100}\b/',
+		// Anthropic Claude API keys: sk-ant-...
+		'anthropic'       => '/\bsk-ant-[A-Za-z0-9_-]{30,100}\b/',
+		// Google AI Studio API keys: AIza...
+		'google_ai'       => '/\bAIza[A-Za-z0-9_-]{30,40}\b/',
+		// Cohere API keys
+		'cohere'          => '/\b[A-Za-z0-9]{30,50}-co\b/',
+		// Hugging Face tokens: hf_...
+		'huggingface'     => '/\bhf_[A-Za-z0-9]{20,40}\b/',
+		// Replicate tokens: r8_...
+		'replicate'       => '/\br8_[A-Za-z0-9]{20,50}\b/',
+		// Azure OpenAI keys (32 hex chars)
+		'azure_openai'    => '/\b[a-f0-9]{32}\b/',
+		// Generic AI API key patterns (fallback)
+		'generic_ai_key'  => '/\b(?:sk-|ai-|api-)[A-Za-z0-9_-]{20,100}\b/',
+	);
+
+	/**
 	 * Detect PII type from field name and value.
 	 *
 	 * @since 1.0.0
@@ -446,6 +483,11 @@ class PIIP_PII_Detector {
 		// Check hosting account/server ID.
 		if ( $this->is_hosting_id( $value ) ) {
 			return 'hosting';
+		}
+
+		// Check AI API key.
+		if ( $this->is_ai_key( $value ) ) {
+			return 'token';
 		}
 
 		// Check token/API key.
@@ -709,6 +751,107 @@ class PIIP_PII_Detector {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Check if value is an AI API key.
+	 *
+	 * Supports various AI service providers:
+	 * - OpenAI (sk-...)
+	 * - Anthropic Claude (sk-ant-...)
+	 * - Google AI Studio (AIza...)
+	 * - Cohere
+	 * - Hugging Face (hf_...)
+	 * - Replicate (r8_...)
+	 * - Azure OpenAI
+	 *
+	 * @since 1.2.2
+	 *
+	 * @param string $value The value to check.
+	 * @return bool True if AI API key, false otherwise.
+	 */
+	public function is_ai_key( $value ) {
+		// Check against known AI API key patterns.
+		foreach ( $this->ai_key_patterns as $provider => $pattern ) {
+			if ( 1 === preg_match( $pattern, $value ) ) {
+				// Additional validation for specific providers.
+				if ( 'azure_openai' === $provider ) {
+					// Azure keys are 32-char hex, but we need to avoid false positives.
+					if ( 32 === strlen( $value ) && ctype_xdigit( $value ) ) {
+						// Check if it looks like a hash (high entropy).
+						$unique_chars = count( array_unique( str_split( strtolower( $value ) ) ) );
+						return $unique_chars >= 8; // Should have diverse hex chars.
+					}
+					continue;
+				}
+
+				if ( 'generic_ai_key' === $provider ) {
+					// Only match generic pattern if no specific pattern matched.
+					// This is a fallback for new AI services.
+					$length = strlen( $value );
+					if ( $length >= 20 && $length <= 100 ) {
+						// Should start with known AI prefixes.
+						if ( preg_match( '/^(sk-|ai-|api-)/i', $value ) ) {
+							return true;
+						}
+					}
+					continue;
+				}
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get the AI service provider from an API key.
+	 *
+	 * @since 1.2.2
+	 *
+	 * @param string $value The API key value.
+	 * @return string|null Provider name or null.
+	 */
+	public function get_ai_provider( $value ) {
+		$providers = array(
+			'openai_legacy'   => 'OpenAI',
+			'openai_project'  => 'OpenAI',
+			'anthropic'       => 'Anthropic',
+			'google_ai'       => 'Google AI',
+			'cohere'          => 'Cohere',
+			'huggingface'     => 'Hugging Face',
+			'replicate'       => 'Replicate',
+			'azure_openai'    => 'Azure OpenAI',
+			'generic_ai_key'  => 'AI Service',
+		);
+
+		foreach ( $this->ai_key_patterns as $name => $pattern ) {
+			if ( 1 === preg_match( $pattern, $value ) ) {
+				// Additional validation for azure_openai.
+				if ( 'azure_openai' === $name ) {
+					if ( 32 === strlen( $value ) && ctype_xdigit( $value ) ) {
+						$unique_chars = count( array_unique( str_split( strtolower( $value ) ) ) );
+						if ( $unique_chars >= 8 ) {
+							return $providers[ $name ];
+						}
+					}
+					continue;
+				}
+
+				// Additional validation for generic pattern.
+				if ( 'generic_ai_key' === $name ) {
+					if ( preg_match( '/^(sk-|ai-|api-)/i', $value ) ) {
+						return $providers[ $name ];
+					}
+					continue;
+				}
+
+				return isset( $providers[ $name ] ) ? $providers[ $name ] : 'Unknown AI Service';
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -978,6 +1121,45 @@ class PIIP_PII_Detector {
 						'type'     => 'hosting',
 						'value'    => $match,
 						'provider' => $this->get_hosting_provider( $match ),
+					);
+				}
+			}
+		}
+
+		// Find AI API keys.
+		foreach ( $this->ai_key_patterns as $name => $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[0] as $match ) {
+					// Additional validation for specific providers.
+					if ( 'azure_openai' === $name ) {
+						if ( 32 === strlen( $match ) && ctype_xdigit( $match ) ) {
+							$unique_chars = count( array_unique( str_split( strtolower( $match ) ) ) );
+							if ( $unique_chars >= 8 ) {
+								$found[] = array(
+									'type'     => 'token',
+									'value'    => $match,
+									'provider' => $this->get_ai_provider( $match ),
+								);
+							}
+						}
+						continue;
+					}
+
+					if ( 'generic_ai_key' === $name ) {
+						if ( preg_match( '/^(sk-|ai-|api-)/i', $match ) ) {
+							$found[] = array(
+								'type'     => 'token',
+								'value'    => $match,
+								'provider' => $this->get_ai_provider( $match ),
+							);
+						}
+						continue;
+					}
+
+					$found[] = array(
+						'type'     => 'token',
+						'value'    => $match,
+						'provider' => $this->get_ai_provider( $match ),
 					);
 				}
 			}
