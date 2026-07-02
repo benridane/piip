@@ -27,6 +27,7 @@ PHPCS-VALIDATION.md
 CONTRIBUTING.md
 CHANGELOG.md
 CUSTOM-HOOKS.md
+docs
 
 # Test plugins (dev only)
 testplugins/
