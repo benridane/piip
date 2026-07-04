@@ -118,6 +118,12 @@ class PIIP_Plugin {
 			require_once PIIP_PLUGIN_DIR . 'admin/class-scan-page.php';
 		}
 
+		// Load WP-CLI command.
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			require_once PIIP_PLUGIN_DIR . 'includes/class-cli.php';
+			WP_CLI::add_command( 'piip', 'PIIP_CLI' );
+		}
+
 		// Load integration base class and integrations.
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-base-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-wpforo-integration.php';
