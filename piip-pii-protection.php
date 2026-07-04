@@ -138,6 +138,8 @@ class PIIP_Plugin {
 	 * @return void
 	 */
 	public function init() {
+		$this->maybe_migrate_settings();
+
 		// Initialize core components.
 		$this->detector = new PIIP_PII_Detector();
 		$this->masker   = new PIIP_PII_Masker( $this->detector );
@@ -150,6 +152,36 @@ class PIIP_Plugin {
 
 		// Initialize community plugin integrations.
 		$this->init_integrations();
+	}
+
+	/**
+	 * Migrate legacy nested integration settings to flat keys.
+	 *
+	 * Activation defaults before 1.5.0 stored integrations as a nested
+	 * `integrations` array, while the settings page saves and
+	 * init_integrations() reads flat `integration_<slug>` keys. Until the
+	 * settings were saved once, enabled integrations never initialized.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return void
+	 */
+	private function maybe_migrate_settings() {
+		$settings = get_option( 'piip_settings', array() );
+
+		if ( ! is_array( $settings ) || ! isset( $settings['integrations'] ) || ! is_array( $settings['integrations'] ) ) {
+			return;
+		}
+
+		foreach ( $settings['integrations'] as $slug => $enabled ) {
+			$flat_key = 'integration_' . sanitize_key( $slug );
+			if ( ! isset( $settings[ $flat_key ] ) ) {
+				$settings[ $flat_key ] = $enabled ? 1 : 0;
+			}
+		}
+
+		unset( $settings['integrations'] );
+		update_option( 'piip_settings', $settings );
 	}
 
 	/**
@@ -259,12 +291,10 @@ class PIIP_Plugin {
 			'mask_token'             => 1,
 			'mask_ip'                => 1,
 			'mask_hosting_id'        => 1,
-			'integrations'           => array(
-				'comments'   => 1,
-				'wpforo'     => 0,
-				'buddypress' => 0,
-				'bbpress'    => 0,
-			),
+			'integration_comments'   => 1,
+			'integration_wpforo'     => 0,
+			'integration_buddypress' => 0,
+			'integration_bbpress'    => 0,
 			'consent_phrases'        => array(
 				array(
 					'phrase'  => 'I consent to share my personal information',
