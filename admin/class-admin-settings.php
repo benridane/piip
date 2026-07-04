@@ -77,6 +77,12 @@ class PIIP_Admin_Settings {
 				'class'       => 'PIIP_bbPress_Integration',
 				'check'       => array( 'PIIP_bbPress_Integration', 'is_plugin_active' ),
 			),
+			'cf7'        => array(
+				'name'        => 'Contact Form 7',
+				'description' => __( 'Masks free-text (message) fields in form submissions; dedicated fields such as name and email are kept for replies. Affects both the sent mail and stored copies (e.g. Flamingo).', 'piip-pii-protection' ),
+				'class'       => 'PIIP_CF7_Integration',
+				'check'       => array( 'PIIP_CF7_Integration', 'is_plugin_active' ),
+			),
 		);
 
 		/**
