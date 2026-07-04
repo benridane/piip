@@ -131,6 +131,7 @@ class PIIP_Plugin {
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-bbpress-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-comments-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-cf7-integration.php';
+		require_once PIIP_PLUGIN_DIR . 'integrations/class-users-integration.php';
 	}
 
 	/**
@@ -240,6 +241,10 @@ class PIIP_Plugin {
 				'class' => 'PIIP_CF7_Integration',
 				'check' => array( 'PIIP_CF7_Integration', 'is_plugin_active' ),
 			),
+			'users'      => array(
+				'class' => 'PIIP_Users_Integration',
+				'check' => array( 'PIIP_Users_Integration', 'is_plugin_active' ),
+			),
 		);
 
 		/**
@@ -319,6 +324,7 @@ class PIIP_Plugin {
 			'integration_buddypress' => 0,
 			'integration_bbpress'    => 0,
 			'integration_cf7'        => 0,
+			'integration_users'      => 0,
 			'consent_phrases'        => array(
 				array(
 					'phrase'  => 'I consent to share my personal information',

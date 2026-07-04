@@ -59,6 +59,12 @@ class PIIP_Admin_Settings {
 				'class'       => 'PIIP_Comments_Integration',
 				'check'       => array( 'PIIP_Comments_Integration', 'is_plugin_active' ),
 			),
+			'users'      => array(
+				'name'        => 'User Profiles',
+				'description' => __( 'Masks PII written into publicly visible profile fields (display name, nickname, biographical info). Account email and website are not touched.', 'piip-pii-protection' ),
+				'class'       => 'PIIP_Users_Integration',
+				'check'       => array( 'PIIP_Users_Integration', 'is_plugin_active' ),
+			),
 			'wpforo'     => array(
 				'name'        => 'wpForo',
 				'description' => __( 'Forum discussions and private messages', 'piip-pii-protection' ),
@@ -310,18 +316,22 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	private function add_wordpress_core_fields() {
-		// Add Comments integration field.
-		if ( isset( $this->available_integrations['comments'] ) ) {
-			$integration = $this->available_integrations['comments'];
+		// Core features live in their own section, not under Plugin Integrations.
+		foreach ( array( 'comments', 'users' ) as $slug ) {
+			if ( ! isset( $this->available_integrations[ $slug ] ) ) {
+				continue;
+			}
+
+			$integration = $this->available_integrations[ $slug ];
 			add_settings_field(
-				'integration_comments',
+				'integration_' . $slug,
 				$integration['name'],
 				array( $this, 'integration_field_callback' ),
 				'piip-settings',
 				'piip_wordpress_core_section',
 				array(
-					'label_for'   => 'integration_comments',
-					'slug'        => 'comments',
+					'label_for'   => 'integration_' . $slug,
+					'slug'        => $slug,
 					'integration' => $integration,
 				)
 			);
@@ -337,8 +347,8 @@ class PIIP_Admin_Settings {
 	 */
 	private function add_integration_fields() {
 		foreach ( $this->available_integrations as $slug => $integration ) {
-			// Skip comments as it's in WordPress Core section.
-			if ( 'comments' === $slug ) {
+			// Skip core features; they are in the WordPress Core section.
+			if ( in_array( $slug, array( 'comments', 'users' ), true ) ) {
 				continue;
 			}
 
@@ -540,7 +550,7 @@ class PIIP_Admin_Settings {
 		// Show status.
 		if ( $is_plugin_active ) {
 			// Different status text for core features vs plugins.
-			if ( 'comments' === $slug ) {
+			if ( in_array( $slug, array( 'comments', 'users' ), true ) ) {
 				printf(
 					'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
 					esc_html__( 'Available', 'piip-pii-protection' )
