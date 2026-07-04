@@ -1165,7 +1165,63 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find site-defined custom patterns.
+		foreach ( self::get_custom_patterns() as $custom ) {
+			if ( preg_match_all( $custom['regex'], $text, $matches ) ) {
+				foreach ( $matches[0] as $match ) {
+					$found[] = array(
+						'type'     => 'custom',
+						'value'    => $match,
+						'provider' => $custom['label'],
+					);
+				}
+			}
+		}
+
 		return $found;
+	}
+
+	/**
+	 * Get enabled, valid site-defined custom patterns from settings.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return array {
+	 *     List of custom patterns.
+	 *
+	 *     @type string $label       Human-readable pattern name.
+	 *     @type string $regex       Delimited, validated regex.
+	 *     @type string $replacement Literal replacement string.
+	 * }
+	 */
+	public static function get_custom_patterns() {
+		$settings = get_option( 'piip_settings', array() );
+		$rows     = isset( $settings['custom_patterns'] ) && is_array( $settings['custom_patterns'] )
+			? $settings['custom_patterns']
+			: array();
+
+		$patterns = array();
+
+		foreach ( $rows as $row ) {
+			if ( empty( $row['enabled'] ) || empty( $row['pattern'] ) ) {
+				continue;
+			}
+
+			$regex = '/' . str_replace( '/', '\/', $row['pattern'] ) . '/u';
+
+			// Rows are validated on save, but guard against manual edits.
+			if ( false === @preg_match( $regex, '' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Probing regex validity.
+				continue;
+			}
+
+			$patterns[] = array(
+				'label'       => isset( $row['label'] ) && '' !== $row['label'] ? $row['label'] : __( 'Custom pattern', 'piip-pii-protection' ),
+				'regex'       => $regex,
+				'replacement' => isset( $row['replacement'] ) && '' !== $row['replacement'] ? $row['replacement'] : '***',
+			);
+		}
+
+		return $patterns;
 	}
 
 	/**
@@ -1190,6 +1246,7 @@ class PIIP_PII_Detector {
 			'token'   => 0.60, // Heuristic-based.
 			'name'    => 0.50, // Context-dependent.
 			'dob'     => 0.60, // Date could be anything.
+			'custom'  => 1.00, // Exact match of a site-defined pattern.
 		);
 
 		$confidence = isset( $base_confidence[ $type ] ) ? $base_confidence[ $type ] : 0.5;

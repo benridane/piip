@@ -161,6 +161,24 @@ class PIIP_Admin_Settings {
 			$(document).on('click', '.piip-remove-phrase', function() {
 				$(this).closest('.piip-phrase-row').remove();
 			});
+
+			var patternIndex = $('#piip-custom-patterns .piip-pattern-row').length;
+
+			$('#piip-add-pattern').on('click', function() {
+				var newRow = '<div class=\"piip-pattern-row\" style=\"margin-bottom: 8px; display: flex; align-items: center; gap: 8px;\">' +
+					'<input type=\"checkbox\" name=\"piip_settings[custom_patterns][' + patternIndex + '][enabled]\" value=\"1\" checked>' +
+					'<input type=\"text\" name=\"piip_settings[custom_patterns][' + patternIndex + '][label]\" value=\"\" placeholder=\"" . esc_js( __( 'Name (e.g. Employee ID)', 'piip-pii-protection' ) ) . "\" style=\"width: 160px;\">' +
+					'<input type=\"text\" name=\"piip_settings[custom_patterns][' + patternIndex + '][pattern]\" value=\"\" class=\"code\" placeholder=\"" . esc_js( __( 'Regex, e.g. EMP-\\d{6}', 'piip-pii-protection' ) ) . "\" style=\"flex: 1;\">' +
+					'<input type=\"text\" name=\"piip_settings[custom_patterns][' + patternIndex + '][replacement]\" value=\"\" class=\"code\" placeholder=\"***\" style=\"width: 140px;\">' +
+					'<button type=\"button\" class=\"button piip-remove-pattern\" style=\"color: #a00;\">" . esc_js( __( 'Remove', 'piip-pii-protection' ) ) . "</button>' +
+					'</div>';
+				$('#piip-custom-patterns').append(newRow);
+				patternIndex++;
+			});
+
+			$(document).on('click', '.piip-remove-pattern', function() {
+				$(this).closest('.piip-pattern-row').remove();
+			});
 		});
 		";
 
@@ -246,12 +264,21 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
+		// Custom patterns section.
+		add_settings_section(
+			'piip_custom_patterns_section',
+			__( 'Custom Patterns', 'piip-pii-protection' ),
+			array( $this, 'custom_patterns_section_callback' ),
+			'piip-settings'
+		);
+
 		// Add fields.
 		$this->add_general_fields();
 		$this->add_wordpress_core_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
 		$this->add_consent_fields();
+		$this->add_custom_pattern_fields();
 	}
 
 	/**
@@ -390,6 +417,26 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Add custom pattern fields.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return void
+	 */
+	private function add_custom_pattern_fields() {
+		add_settings_field(
+			'custom_patterns',
+			__( 'Patterns', 'piip-pii-protection' ),
+			array( $this, 'custom_patterns_field_callback' ),
+			'piip-settings',
+			'piip_custom_patterns_section',
+			array(
+				'label_for' => 'custom_patterns',
+			)
+		);
+	}
+
+	/**
 	 * General section callback.
 	 *
 	 * @since 1.0.0
@@ -449,6 +496,17 @@ class PIIP_Admin_Settings {
 	 */
 	public function consent_section_callback() {
 		echo '<p>' . esc_html__( 'When content contains one of these phrases, PII masking will be skipped. Users can include these phrases to share personal information publicly.', 'piip-pii-protection' ) . '</p>';
+	}
+
+	/**
+	 * Custom patterns section callback.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return void
+	 */
+	public function custom_patterns_section_callback() {
+		echo '<p>' . esc_html__( 'Mask site-specific identifiers (e.g. employee or member IDs) with your own regular expressions. Each match is replaced with the replacement text.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -646,6 +704,58 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Custom patterns field callback.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param array $args Field arguments.
+	 * @return void
+	 *
+	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+	 */
+	public function custom_patterns_field_callback( $args ) {
+		unset( $args ); // Explicitly unset unused parameter.
+		$options  = get_option( 'piip_settings', array() );
+		$patterns = isset( $options['custom_patterns'] ) && is_array( $options['custom_patterns'] ) ? $options['custom_patterns'] : array();
+
+		echo '<div id="piip-custom-patterns">';
+
+		foreach ( $patterns as $index => $pattern_data ) {
+			$label       = isset( $pattern_data['label'] ) ? $pattern_data['label'] : '';
+			$pattern     = isset( $pattern_data['pattern'] ) ? $pattern_data['pattern'] : '';
+			$replacement = isset( $pattern_data['replacement'] ) ? $pattern_data['replacement'] : '';
+			$enabled     = ! empty( $pattern_data['enabled'] );
+
+			printf(
+				'<div class="piip-pattern-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+					<input type="checkbox" name="piip_settings[custom_patterns][%1$d][enabled]" value="1" %2$s>
+					<input type="text" name="piip_settings[custom_patterns][%1$d][label]" value="%3$s" placeholder="%6$s" style="width: 160px;">
+					<input type="text" name="piip_settings[custom_patterns][%1$d][pattern]" value="%4$s" class="code" placeholder="%7$s" style="flex: 1;">
+					<input type="text" name="piip_settings[custom_patterns][%1$d][replacement]" value="%5$s" class="code" placeholder="***" style="width: 140px;">
+					<button type="button" class="button piip-remove-pattern" style="color: #a00;">%8$s</button>
+				</div>',
+				absint( $index ),
+				checked( $enabled, true, false ),
+				esc_attr( $label ),
+				esc_attr( $pattern ),
+				esc_attr( $replacement ),
+				esc_attr__( 'Name (e.g. Employee ID)', 'piip-pii-protection' ),
+				esc_attr__( 'Regex, e.g. EMP-\d{6}', 'piip-pii-protection' ),
+				esc_html__( 'Remove', 'piip-pii-protection' )
+			);
+		}
+
+		echo '</div>';
+
+		printf(
+			'<button type="button" id="piip-add-pattern" class="button" style="margin-top: 8px;">%s</button>',
+			esc_html__( '+ Add Pattern', 'piip-pii-protection' )
+		);
+
+		echo '<p class="description">' . esc_html__( 'Regular expression without delimiters, applied case-sensitively to text content (PCRE, Unicode mode). Invalid expressions are rejected on save. The replacement is inserted literally.', 'piip-pii-protection' ) . '</p>';
+	}
+
+	/**
 	 * Sanitize settings.
 	 *
 	 * @since 1.0.0
@@ -690,6 +800,49 @@ class PIIP_Admin_Settings {
 			}
 			// Re-index array.
 			$sanitized['consent_phrases'] = array_values( $sanitized['consent_phrases'] );
+		}
+
+		// Sanitize custom patterns.
+		if ( isset( $input['custom_patterns'] ) && is_array( $input['custom_patterns'] ) ) {
+			$sanitized['custom_patterns'] = array();
+			foreach ( $input['custom_patterns'] as $pattern_data ) {
+				$pattern = isset( $pattern_data['pattern'] ) ? trim( (string) $pattern_data['pattern'] ) : '';
+
+				if ( '' === $pattern ) {
+					continue;
+				}
+
+				if ( strlen( $pattern ) > 500 ) {
+					add_settings_error(
+						'piip_settings',
+						'piip_custom_pattern_too_long',
+						__( 'A custom pattern was discarded: patterns are limited to 500 characters.', 'piip-pii-protection' )
+					);
+					continue;
+				}
+
+				$regex = '/' . str_replace( '/', '\/', $pattern ) . '/u';
+				if ( false === @preg_match( $regex, '' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Probing regex validity.
+					add_settings_error(
+						'piip_settings',
+						'piip_custom_pattern_invalid',
+						sprintf(
+							/* translators: %s: the rejected regular expression. */
+							__( 'A custom pattern was discarded because it is not a valid regular expression: %s', 'piip-pii-protection' ),
+							$pattern
+						)
+					);
+					continue;
+				}
+
+				$sanitized['custom_patterns'][] = array(
+					'label'       => isset( $pattern_data['label'] ) ? sanitize_text_field( $pattern_data['label'] ) : '',
+					'pattern'     => $pattern,
+					'replacement' => isset( $pattern_data['replacement'] ) ? sanitize_text_field( $pattern_data['replacement'] ) : '',
+					'enabled'     => ! empty( $pattern_data['enabled'] ) ? 1 : 0,
+				);
+			}
+			$sanitized['custom_patterns'] = array_values( $sanitized['custom_patterns'] );
 		}
 
 		return $sanitized;
