@@ -58,6 +58,14 @@ class PIIP_Plugin {
 	public $masker;
 
 	/**
+	 * Content scanner instance.
+	 *
+	 * @since 1.5.0
+	 * @var PIIP_Content_Scanner
+	 */
+	public $scanner;
+
+	/**
 	 * Active integrations.
 	 *
 	 * @since 1.0.0
@@ -101,11 +109,13 @@ class PIIP_Plugin {
 		// Load core classes.
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-detector.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-masker.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-content-scanner.php';
 
 		// Load admin classes.
 		if ( is_admin() ) {
 			require_once PIIP_PLUGIN_DIR . 'admin/class-admin-settings.php';
 			require_once PIIP_PLUGIN_DIR . 'admin/class-preview-ajax.php';
+			require_once PIIP_PLUGIN_DIR . 'admin/class-scan-page.php';
 		}
 
 		// Load integration base class and integrations.
@@ -143,11 +153,13 @@ class PIIP_Plugin {
 		// Initialize core components.
 		$this->detector = new PIIP_PII_Detector();
 		$this->masker   = new PIIP_PII_Masker( $this->detector );
+		$this->scanner  = new PIIP_Content_Scanner( $this->masker, $this->detector );
 
 		// Initialize admin.
 		if ( is_admin() ) {
 			new PIIP_Admin_Settings();
 			new PIIP_Preview_Ajax( $this->masker, $this->detector );
+			new PIIP_Scan_Page( $this->scanner );
 		}
 
 		// Initialize community plugin integrations.
