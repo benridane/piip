@@ -92,5 +92,5 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 	<h2><?php esc_html_e( 'Information', 'piip-pii-protection' ); ?></h2>
 	<p><?php esc_html_e( 'This plugin automatically masks personally identifiable information (PII) in WordPress comments and community plugin content before saving to the database.', 'piip-pii-protection' ); ?></p>
-	<p><?php esc_html_e( 'Supported integrations: WordPress Comments, wpForo, BuddyPress, bbPress', 'piip-pii-protection' ); ?></p>
+	<p><?php esc_html_e( 'Supported integrations: WordPress Comments, User Profiles, Contact Form 7, wpForo, BuddyPress, bbPress', 'piip-pii-protection' ); ?></p>
 </div>

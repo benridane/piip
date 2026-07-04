@@ -4,7 +4,7 @@ Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.2
-Stable tag: 1.4.1
+Stable tag: 1.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,6 +23,9 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
 * **Consent Opt-Out**: Users can include consent phrases to skip masking when sharing personal info publicly
 * **Presidio-Level Detection**: High-accuracy detection with validation (Luhn for credit cards, check digits for My Number)
+* **Retroactive Scan**: Scan content that existed before installing PIIP and apply masking after a dry-run review
+* **Custom Patterns**: Mask site-specific identifiers (employee IDs, member numbers) with your own regular expressions
+* **WP-CLI Support**: `wp piip mask` and `wp piip scan` commands for automation and large sites
 
 = Supported PII Types =
 
@@ -41,6 +44,9 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 
 * **WordPress Core**
   * Comments
+  * User Profiles (display name, nickname, biographical info)
+* **Form Plugins**
+  * Contact Form 7 (free-text fields; protects sent mail and stored copies such as Flamingo)
 * **Community Plugins**
   * wpForo Forum
   * BuddyPress
@@ -133,6 +139,14 @@ Yes. PIIP helps with GDPR compliance by:
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.5.0 - 2026-07-05 =
+* **New**: PII Scan tool (Tools → PII Scan) - scan existing comments and posts for PII with a dry-run report, then apply masking retroactively
+* **New**: Contact Form 7 integration - masks free-text (message) fields in submissions, protecting both the sent mail and stored copies (e.g. Flamingo); name/email fields are kept for replies
+* **New**: User Profiles integration - masks PII written into publicly visible profile fields (display name, nickname, biographical info)
+* **New**: Custom patterns - define your own regex patterns and replacements in the settings for site-specific identifiers (employee IDs, member numbers, etc.)
+* **New**: WP-CLI commands - `wp piip mask` and `wp piip scan --apply` for large sites and CI
+* **Fixed**: Enabled integrations (e.g. Comments) were inactive until the settings were saved once, due to a settings key mismatch in the activation defaults
 
 = 1.4.1 - 2026-07-02 =
 * **New**: Masking Preview tool on the settings page - type sample text and see the masked result in real time
