@@ -4,7 +4,7 @@ Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
 Tested up to: 6.9
 Requires PHP: 8.2
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -133,6 +133,13 @@ Yes. PIIP helps with GDPR compliance by:
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.4.1 - 2026-07-02 =
+* **New**: Masking Preview tool on the settings page - type sample text and see the masked result in real time
+* **New**: Field name + value preview mode for testing field-based detection (e.g. password fields)
+* **New**: Detected PII breakdown with type, confidence score, and actual masking status
+* **New**: Consent phrase bypass indication in the preview
+* **Fixed**: Japanese toll-free numbers (0120-xxx-xxx, 0800-xxx-xxxx) were detected but not masked in free text content
 
 = 1.4.0 - 2026-02-07 =
 * **New Feature**: AI API Key Detection and Masking

@@ -159,6 +159,30 @@ class PIIP_Admin_Settings {
 		";
 
 		wp_add_inline_script( 'jquery', $script );
+
+		wp_enqueue_script(
+			'piip-admin-preview',
+			PIIP_PLUGIN_URL . 'admin/js/preview.js',
+			array( 'jquery' ),
+			PIIP_VERSION,
+			true
+		);
+		wp_localize_script(
+			'piip-admin-preview',
+			'piipPreview',
+			array(
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'nonce'   => wp_create_nonce( 'piip_preview_mask' ),
+				'i18n'    => array(
+					'checking'    => __( 'Checking…', 'piip-pii-protection' ),
+					'error'       => __( 'Preview request failed. Please try again.', 'piip-pii-protection' ),
+					'masked'      => __( 'Masked', 'piip-pii-protection' ),
+					'notMasked'   => __( 'Not masked', 'piip-pii-protection' ),
+					'disabled'    => __( 'Disabled in settings', 'piip-pii-protection' ),
+					'notMaskable' => __( 'Detected only (not masked)', 'piip-pii-protection' ),
+				),
+			)
+		);
 	}
 
 	/**

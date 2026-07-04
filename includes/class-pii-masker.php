@@ -375,11 +375,12 @@ class PIIP_PII_Masker {
 	 * Check if value contains consent phrase.
 	 *
 	 * @since 1.2.2
+	 * @since 1.4.1 Made public for the masking preview feature.
 	 *
 	 * @param string $value The value to check.
 	 * @return bool True if consent phrase found, false otherwise.
 	 */
-	private function has_consent_phrase( $value ) {
+	public function has_consent_phrase( $value ) {
 		$consent_phrases = $this->settings['consent_phrases'] ?? array();
 		
 		if ( empty( $consent_phrases ) || ! is_array( $consent_phrases ) ) {
@@ -785,6 +786,8 @@ class PIIP_PII_Masker {
 		$patterns = array(
 			// Japanese mobile patterns: 090, 080, 070 numbers.
 			'/\b0[789]0[-\s]?\d{4}[-\s]?\d{4}\b/',
+			// Japanese toll-free: 0120-xxx-xxx, 0800-xxx-xxxx (same as detector).
+			'/\b0[18]20[-\s]?\d{3}[-\s]?\d{3,4}\b/',
 			// Japanese landline patterns: area code + number.
 			'/\b0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4}\b/',
 			// International format with +.

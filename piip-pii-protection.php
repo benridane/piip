@@ -3,7 +3,7 @@
  * Plugin Name:       PIIP - PII Protection
  * Plugin URI:        https://benridane.com/piip
  * Description:       Automatically masks personally identifiable information (PII) in community plugins to protect user privacy.
- * Version:           1.4.0
+ * Version:           1.4.1
  * Requires at least: 6.9
  * Requires PHP:      8.2
  * Author:            Benridane
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'PIIP_VERSION', '1.4.0' );
+define( 'PIIP_VERSION', '1.4.1' );
 define( 'PIIP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PIIP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'PIIP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -105,6 +105,7 @@ class PIIP_Plugin {
 		// Load admin classes.
 		if ( is_admin() ) {
 			require_once PIIP_PLUGIN_DIR . 'admin/class-admin-settings.php';
+			require_once PIIP_PLUGIN_DIR . 'admin/class-preview-ajax.php';
 		}
 
 		// Load integration base class and integrations.
@@ -144,6 +145,7 @@ class PIIP_Plugin {
 		// Initialize admin.
 		if ( is_admin() ) {
 			new PIIP_Admin_Settings();
+			new PIIP_Preview_Ajax( $this->masker, $this->detector );
 		}
 
 		// Initialize community plugin integrations.
