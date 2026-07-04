@@ -1102,6 +1102,13 @@ class PIIP_PII_Detector {
 
 		// Find hosting account/server IDs.
 		foreach ( $this->hosting_patterns as $name => $pattern ) {
+			// GCP project IDs are indistinguishable from ordinary lowercase
+			// words in free text and mask_text() does not mask them; the
+			// pattern only makes sense for whole field values (is_hosting_id).
+			if ( 'gcp_project' === $name ) {
+				continue;
+			}
+
 			if ( preg_match_all( $pattern, $text, $matches ) ) {
 				foreach ( $matches[0] as $match ) {
 					// Skip false positives.

@@ -147,6 +147,7 @@ Yes. PIIP helps with GDPR compliance by:
 * **New**: Custom patterns - define your own regex patterns and replacements in the settings for site-specific identifiers (employee IDs, member numbers, etc.)
 * **New**: WP-CLI commands - `wp piip mask` and `wp piip scan --apply` for large sites and CI
 * **Fixed**: Enabled integrations (e.g. Comments) were inactive until the settings were saved once, due to a settings key mismatch in the activation defaults
+* **Fixed**: Ordinary words were reported as GCP hosting IDs in the preview/scan detection breakdown, flagging almost every text as containing PII
 
 = 1.4.1 - 2026-07-02 =
 * **New**: Masking Preview tool on the settings page - type sample text and see the masked result in real time
