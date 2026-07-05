@@ -746,6 +746,33 @@ class PIIP_PII_Masker {
 			$text = $this->mask_ai_keys_in_text( $text );
 		}
 
+		// Mask site-defined custom patterns.
+		$text = $this->mask_custom_patterns_in_text( $text );
+
+		return $text;
+	}
+
+	/**
+	 * Mask site-defined custom patterns found in text.
+	 *
+	 * Patterns are managed on the settings page and validated on save;
+	 * each match is replaced with the pattern's literal replacement string.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with custom patterns masked.
+	 */
+	private function mask_custom_patterns_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::get_custom_patterns() as $custom ) {
+			// Escape backslashes and dollar signs so the replacement stays literal.
+			$replaced = preg_replace( $custom['regex'], addcslashes( $custom['replacement'], '\\$' ), $text );
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
 		return $text;
 	}
 

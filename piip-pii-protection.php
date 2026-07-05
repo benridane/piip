@@ -3,7 +3,7 @@
  * Plugin Name:       PIIP - PII Protection
  * Plugin URI:        https://benridane.com/piip
  * Description:       Automatically masks personally identifiable information (PII) in community plugins to protect user privacy.
- * Version:           1.4.1
+ * Version:           1.5.0
  * Requires at least: 6.9
  * Requires PHP:      8.2
  * Author:            Benridane
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'PIIP_VERSION', '1.4.1' );
+define( 'PIIP_VERSION', '1.5.0' );
 define( 'PIIP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PIIP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'PIIP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -56,6 +56,14 @@ class PIIP_Plugin {
 	 * @var PIIP_PII_Masker
 	 */
 	public $masker;
+
+	/**
+	 * Content scanner instance.
+	 *
+	 * @since 1.5.0
+	 * @var PIIP_Content_Scanner
+	 */
+	public $scanner;
 
 	/**
 	 * Active integrations.
@@ -101,11 +109,19 @@ class PIIP_Plugin {
 		// Load core classes.
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-detector.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-masker.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-content-scanner.php';
 
 		// Load admin classes.
 		if ( is_admin() ) {
 			require_once PIIP_PLUGIN_DIR . 'admin/class-admin-settings.php';
 			require_once PIIP_PLUGIN_DIR . 'admin/class-preview-ajax.php';
+			require_once PIIP_PLUGIN_DIR . 'admin/class-scan-page.php';
+		}
+
+		// Load WP-CLI command.
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			require_once PIIP_PLUGIN_DIR . 'includes/class-cli.php';
+			WP_CLI::add_command( 'piip', 'PIIP_CLI' );
 		}
 
 		// Load integration base class and integrations.
@@ -114,6 +130,8 @@ class PIIP_Plugin {
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-buddypress-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-bbpress-integration.php';
 		require_once PIIP_PLUGIN_DIR . 'integrations/class-comments-integration.php';
+		require_once PIIP_PLUGIN_DIR . 'integrations/class-cf7-integration.php';
+		require_once PIIP_PLUGIN_DIR . 'integrations/class-users-integration.php';
 	}
 
 	/**
@@ -138,18 +156,52 @@ class PIIP_Plugin {
 	 * @return void
 	 */
 	public function init() {
+		$this->maybe_migrate_settings();
+
 		// Initialize core components.
 		$this->detector = new PIIP_PII_Detector();
 		$this->masker   = new PIIP_PII_Masker( $this->detector );
+		$this->scanner  = new PIIP_Content_Scanner( $this->masker, $this->detector );
 
 		// Initialize admin.
 		if ( is_admin() ) {
 			new PIIP_Admin_Settings();
 			new PIIP_Preview_Ajax( $this->masker, $this->detector );
+			new PIIP_Scan_Page( $this->scanner );
 		}
 
 		// Initialize community plugin integrations.
 		$this->init_integrations();
+	}
+
+	/**
+	 * Migrate legacy nested integration settings to flat keys.
+	 *
+	 * Activation defaults before 1.5.0 stored integrations as a nested
+	 * `integrations` array, while the settings page saves and
+	 * init_integrations() reads flat `integration_<slug>` keys. Until the
+	 * settings were saved once, enabled integrations never initialized.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return void
+	 */
+	private function maybe_migrate_settings() {
+		$settings = get_option( 'piip_settings', array() );
+
+		if ( ! is_array( $settings ) || ! isset( $settings['integrations'] ) || ! is_array( $settings['integrations'] ) ) {
+			return;
+		}
+
+		foreach ( $settings['integrations'] as $slug => $enabled ) {
+			$flat_key = 'integration_' . sanitize_key( $slug );
+			if ( ! isset( $settings[ $flat_key ] ) ) {
+				$settings[ $flat_key ] = $enabled ? 1 : 0;
+			}
+		}
+
+		unset( $settings['integrations'] );
+		update_option( 'piip_settings', $settings );
 	}
 
 	/**
@@ -184,6 +236,14 @@ class PIIP_Plugin {
 			'comments'   => array(
 				'class' => 'PIIP_Comments_Integration',
 				'check' => array( 'PIIP_Comments_Integration', 'is_plugin_active' ),
+			),
+			'cf7'        => array(
+				'class' => 'PIIP_CF7_Integration',
+				'check' => array( 'PIIP_CF7_Integration', 'is_plugin_active' ),
+			),
+			'users'      => array(
+				'class' => 'PIIP_Users_Integration',
+				'check' => array( 'PIIP_Users_Integration', 'is_plugin_active' ),
 			),
 		);
 
@@ -259,12 +319,12 @@ class PIIP_Plugin {
 			'mask_token'             => 1,
 			'mask_ip'                => 1,
 			'mask_hosting_id'        => 1,
-			'integrations'           => array(
-				'comments'   => 1,
-				'wpforo'     => 0,
-				'buddypress' => 0,
-				'bbpress'    => 0,
-			),
+			'integration_comments'   => 1,
+			'integration_wpforo'     => 0,
+			'integration_buddypress' => 0,
+			'integration_bbpress'    => 0,
+			'integration_cf7'        => 0,
+			'integration_users'      => 0,
 			'consent_phrases'        => array(
 				array(
 					'phrase'  => 'I consent to share my personal information',
