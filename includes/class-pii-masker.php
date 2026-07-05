@@ -729,6 +729,12 @@ class PIIP_PII_Masker {
 			return $text;
 		}
 
+		// Mask labeled passwords ("password: xxx") before generic token
+		// patterns can consume parts of the value.
+		if ( $this->should_mask_type( 'password' ) ) {
+			$text = $this->mask_labeled_passwords_in_text( $text );
+		}
+
 		// Mask emails (high confidence).
 		if ( $this->should_mask_type( 'email' ) ) {
 			$text = $this->mask_emails_in_text( $text );
@@ -793,6 +799,22 @@ class PIIP_PII_Masker {
 		}
 
 		return $text;
+	}
+
+	/**
+	 * Mask labeled password values found in text ("password: xxx").
+	 *
+	 * Keeps the label and separator, replaces the value with [REDACTED].
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with labeled passwords masked.
+	 */
+	private function mask_labeled_passwords_in_text( $text ) {
+		$replaced = preg_replace( PIIP_PII_Detector::LABELED_PASSWORD_PATTERN, '$1[REDACTED]', $text );
+
+		return null === $replaced ? $text : $replaced;
 	}
 
 	/**

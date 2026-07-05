@@ -354,6 +354,19 @@ class PIIP_PII_Detector {
 	);
 
 	/**
+	 * Labeled password pattern for free text ("password: xxx").
+	 *
+	 * Shared with the masker. The value class is printable ASCII only,
+	 * which structurally rejects Japanese prose following the label
+	 * (e.g. パスワードは忘れました), and the lookbehind keeps the label
+	 * from matching inside identifiers.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const LABELED_PASSWORD_PATTERN = '/((?<![A-Za-z0-9_])(?:password|passwd|pwd|パスワード|暗証番号)[\s　]*[::=は][\s　]*)([\x21-\x7E]{4,64})/iu';
+
+	/**
 	 * Detect PII type from field name and value.
 	 *
 	 * @since 1.0.0
@@ -1172,6 +1185,16 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find labeled passwords ("password: xxx").
+		if ( preg_match_all( self::LABELED_PASSWORD_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				$found[] = array(
+					'type'  => 'password',
+					'value' => $match,
+				);
+			}
+		}
+
 		// Find site-defined custom patterns.
 		foreach ( self::get_custom_patterns() as $custom ) {
 			if ( preg_match_all( $custom['regex'], $text, $matches ) ) {
@@ -1243,17 +1266,18 @@ class PIIP_PII_Detector {
 	 */
 	public function get_confidence( $type, $value, $context = '' ) {
 		$base_confidence = array(
-			'email'   => 0.95, // Very reliable pattern.
-			'card'    => 0.95, // Luhn validation.
-			'ssn'     => 0.90, // Format + validation.
-			'ip'      => 0.95, // Very reliable pattern.
-			'phone'   => 0.70, // Can have false positives.
-			'url'     => 0.90, // Reliable pattern.
-			'hosting' => 0.85, // Provider-specific patterns.
-			'token'   => 0.60, // Heuristic-based.
-			'name'    => 0.50, // Context-dependent.
-			'dob'     => 0.60, // Date could be anything.
-			'custom'  => 1.00, // Exact match of a site-defined pattern.
+			'email'    => 0.95, // Very reliable pattern.
+			'card'     => 0.95, // Luhn validation.
+			'ssn'      => 0.90, // Format + validation.
+			'ip'       => 0.95, // Very reliable pattern.
+			'phone'    => 0.70, // Can have false positives.
+			'url'      => 0.90, // Reliable pattern.
+			'hosting'  => 0.85, // Provider-specific patterns.
+			'token'    => 0.60, // Heuristic-based.
+			'password' => 0.85, // Labeled matches only.
+			'name'     => 0.50, // Context-dependent.
+			'dob'      => 0.60, // Date could be anything.
+			'custom'   => 1.00, // Exact match of a site-defined pattern.
 		);
 
 		$confidence = isset( $base_confidence[ $type ] ) ? $base_confidence[ $type ] : 0.5;
