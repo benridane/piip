@@ -8,7 +8,7 @@ Stable tag: 1.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically detects and masks PII in WordPress comments and forms to protect user privacy and support your data protection efforts.
+Automatically detects and masks PII in WordPress comments and forms to protect user privacy and support your GDPR compliance efforts.
 
 == Description ==
 
