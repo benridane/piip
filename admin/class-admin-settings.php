@@ -383,7 +383,12 @@ class PIIP_Admin_Settings {
 			'ssn'      => __( 'Social Security Numbers', 'piip-pii-protection' ),
 			'password' => __( 'Passwords', 'piip-pii-protection' ),
 			'token'    => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
+			'ip'       => __( 'IP Addresses', 'piip-pii-protection' ),
+			'hosting'  => __( 'Hosting Account IDs', 'piip-pii-protection' ),
 		);
+
+		// Opt-in types: unchecked when the setting has never been saved.
+		$default_off = array( 'name_text' );
 
 		foreach ( $pii_types as $type => $label ) {
 			add_settings_field(
@@ -394,6 +399,7 @@ class PIIP_Admin_Settings {
 				'piip_pii_types_section',
 				array(
 					'label_for' => 'mask_' . $type,
+					'default'   => in_array( $type, $default_off, true ) ? 0 : 1,
 				)
 			);
 		}
@@ -585,10 +591,10 @@ class PIIP_Admin_Settings {
 	 */
 	public function checkbox_field_callback( $args ) {
 		$options = get_option( 'piip_settings', array() );
-		$checked = isset( $options[ $args['label_for'] ] ) ? checked( $options[ $args['label_for'] ], 1, false ) : '';
+		$default = isset( $args['default'] ) ? (int) $args['default'] : 1;
 
 		if ( ! isset( $options[ $args['label_for'] ] ) ) {
-			$checked_attr = 'checked="checked"'; // Default to enabled.
+			$checked_attr = $default ? 'checked="checked"' : '';
 		} else {
 			$checked_attr = $options[ $args['label_for'] ] ? 'checked="checked"' : '';
 		}
@@ -786,6 +792,8 @@ class PIIP_Admin_Settings {
 			'mask_ssn',
 			'mask_password',
 			'mask_token',
+			'mask_ip',
+			'mask_hosting',
 		);
 
 		// Add integration checkboxes.
@@ -796,6 +804,9 @@ class PIIP_Admin_Settings {
 		foreach ( $checkboxes as $checkbox ) {
 			$sanitized[ $checkbox ] = isset( $input[ $checkbox ] ) ? 1 : 0;
 		}
+
+		// Saving replaces the whole option; keep the schema version.
+		$sanitized['settings_version'] = PIIP_SETTINGS_VERSION;
 
 		// Sanitize consent phrases.
 		if ( isset( $input['consent_phrases'] ) && is_array( $input['consent_phrases'] ) ) {

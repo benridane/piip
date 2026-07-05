@@ -24,6 +24,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 class PIIP_PII_Masker {
 
 	/**
+	 * PII types that are opt-in: masked only when explicitly enabled.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	private const DEFAULT_OFF_TYPES = array( 'name_text' );
+
+	/**
 	 * PII Detector instance.
 	 *
 	 * @since 1.0.0
@@ -734,7 +742,9 @@ class PIIP_PII_Masker {
 		}
 
 		// Mask IP addresses.
-		$text = $this->mask_ip_addresses_in_text( $text );
+		if ( $this->should_mask_type( 'ip' ) ) {
+			$text = $this->mask_ip_addresses_in_text( $text );
+		}
 
 		// Mask hosting account/server IDs.
 		if ( $this->should_mask_type( 'hosting' ) ) {
@@ -1100,23 +1110,27 @@ class PIIP_PII_Masker {
 	/**
 	 * Check if a PII type should be masked based on settings.
 	 *
+	 * An explicit mask_{type} setting always wins. When the setting is
+	 * missing (fresh site, pre-upgrade option shape), the type's default
+	 * applies: enabled for everything except the opt-in types listed in
+	 * DEFAULT_OFF_TYPES.
+	 *
 	 * @since 1.0.0
+	 * @since 1.6.0 Made public; missing settings now honor per-type defaults.
 	 *
 	 * @param string|null $pii_type The PII type to check.
 	 * @return bool True if should mask, false otherwise.
 	 */
-	private function should_mask_type( $pii_type ) {
+	public function should_mask_type( $pii_type ) {
 		if ( null === $pii_type ) {
 			return false;
 		}
 
-		// If no settings, mask all types by default.
-		if ( empty( $this->settings ) ) {
-			return true;
+		$setting_key = 'mask_' . $pii_type;
+		if ( isset( $this->settings[ $setting_key ] ) ) {
+			return ! empty( $this->settings[ $setting_key ] );
 		}
 
-		// Check if this specific type is enabled.
-		$setting_key = 'mask_' . $pii_type;
-		return ! isset( $this->settings[ $setting_key ] ) || ! empty( $this->settings[ $setting_key ] );
+		return ! in_array( $pii_type, self::DEFAULT_OFF_TYPES, true );
 	}
 }

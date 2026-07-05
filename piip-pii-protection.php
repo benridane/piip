@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define plugin constants.
 define( 'PIIP_VERSION', '1.5.0' );
+define( 'PIIP_SETTINGS_VERSION', 2 );
 define( 'PIIP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PIIP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'PIIP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -175,33 +176,72 @@ class PIIP_Plugin {
 	}
 
 	/**
-	 * Migrate legacy nested integration settings to flat keys.
+	 * Migrate stored settings to the current shape.
 	 *
-	 * Activation defaults before 1.5.0 stored integrations as a nested
-	 * `integrations` array, while the settings page saves and
-	 * init_integrations() reads flat `integration_<slug>` keys. Until the
-	 * settings were saved once, enabled integrations never initialized.
+	 * Handles two legacy issues plus versioned upgrades:
+	 * - pre-1.5.0 nested `integrations` array -> flat `integration_<slug>`
+	 * - pre-1.6.0 `mask_hosting_id` key -> `mask_hosting` (the key the
+	 *   masker actually reads), and seeding of new per-type defaults
+	 *   (`settings_version` guards the versioned block).
 	 *
 	 * @since 1.5.0
+	 * @since 1.6.0 Added the versioned settings upgrade.
 	 *
 	 * @return void
 	 */
 	private function maybe_migrate_settings() {
 		$settings = get_option( 'piip_settings', array() );
 
-		if ( ! is_array( $settings ) || ! isset( $settings['integrations'] ) || ! is_array( $settings['integrations'] ) ) {
+		// Never materialize the option for sites that were never activated.
+		if ( ! is_array( $settings ) || empty( $settings ) ) {
 			return;
 		}
 
-		foreach ( $settings['integrations'] as $slug => $enabled ) {
-			$flat_key = 'integration_' . sanitize_key( $slug );
-			if ( ! isset( $settings[ $flat_key ] ) ) {
-				$settings[ $flat_key ] = $enabled ? 1 : 0;
+		$changed = false;
+
+		if ( isset( $settings['integrations'] ) && is_array( $settings['integrations'] ) ) {
+			foreach ( $settings['integrations'] as $slug => $enabled ) {
+				$flat_key = 'integration_' . sanitize_key( $slug );
+				if ( ! isset( $settings[ $flat_key ] ) ) {
+					$settings[ $flat_key ] = $enabled ? 1 : 0;
+				}
 			}
+			unset( $settings['integrations'] );
+			$changed = true;
 		}
 
-		unset( $settings['integrations'] );
-		update_option( 'piip_settings', $settings );
+		$version = isset( $settings['settings_version'] ) ? (int) $settings['settings_version'] : 1;
+
+		if ( $version < 2 ) {
+			// The activation default was stored as mask_hosting_id while the
+			// runtime reads mask_hosting; carry an explicit choice over.
+			if ( isset( $settings['mask_hosting_id'] ) && ! isset( $settings['mask_hosting'] ) ) {
+				$settings['mask_hosting'] = $settings['mask_hosting_id'] ? 1 : 0;
+			}
+			unset( $settings['mask_hosting_id'] );
+
+			// New in 1.6.0. IP masking was previously always on, so default
+			// to on for upgraders; name_text is the one opt-in type.
+			$new_defaults = array(
+				'mask_hosting'   => 1,
+				'mask_ip'        => 1,
+				'mask_dob'       => 1,
+				'mask_bank'      => 1,
+				'mask_name_text' => 0,
+			);
+			foreach ( $new_defaults as $key => $default ) {
+				if ( ! isset( $settings[ $key ] ) ) {
+					$settings[ $key ] = $default;
+				}
+			}
+
+			$settings['settings_version'] = PIIP_SETTINGS_VERSION;
+			$changed = true;
+		}
+
+		if ( $changed ) {
+			update_option( 'piip_settings', $settings );
+		}
 	}
 
 	/**
@@ -310,6 +350,7 @@ class PIIP_Plugin {
 		// Set default settings.
 		$default_settings = array(
 			'enable_masking'         => 1,
+			'settings_version'       => PIIP_SETTINGS_VERSION,
 			'mask_email'             => 1,
 			'mask_phone'             => 1,
 			'mask_address'           => 1,
@@ -318,7 +359,10 @@ class PIIP_Plugin {
 			'mask_password'          => 1,
 			'mask_token'             => 1,
 			'mask_ip'                => 1,
-			'mask_hosting_id'        => 1,
+			'mask_hosting'           => 1,
+			'mask_dob'               => 1,
+			'mask_bank'              => 1,
+			'mask_name_text'         => 0,
 			'integration_comments'   => 1,
 			'integration_wpforo'     => 0,
 			'integration_buddypress' => 0,

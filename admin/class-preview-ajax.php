@@ -197,23 +197,15 @@ class PIIP_Preview_Ajax {
 	/**
 	 * Check whether a PII type is enabled in the saved settings.
 	 *
-	 * Same rule as PIIP_PII_Masker::should_mask_type(): enabled unless the
-	 * mask_{type} setting exists and is explicitly off.
-	 *
 	 * @since 1.4.1
+	 * @since 1.6.0 Delegates to PIIP_PII_Masker::should_mask_type() so the
+	 *              per-type defaults (including opt-in types) cannot drift.
 	 *
 	 * @param string $pii_type The PII type.
 	 * @return bool True if the type will be masked.
 	 */
 	private function is_type_enabled( $pii_type ) {
-		$settings = get_option( 'piip_settings', array() );
-
-		if ( empty( $settings ) ) {
-			return true;
-		}
-
-		$setting_key = 'mask_' . $pii_type;
-		return ! isset( $settings[ $setting_key ] ) || ! empty( $settings[ $setting_key ] );
+		return $this->masker->should_mask_type( $pii_type );
 	}
 
 	/**
