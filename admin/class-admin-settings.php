@@ -376,17 +376,18 @@ class PIIP_Admin_Settings {
 	 */
 	private function add_pii_type_fields() {
 		$pii_types = array(
-			'email'    => __( 'Email Addresses', 'piip-pii-protection' ),
-			'phone'    => __( 'Phone Numbers', 'piip-pii-protection' ),
-			'address'  => __( 'Addresses', 'piip-pii-protection' ),
-			'card'     => __( 'Credit Card Numbers', 'piip-pii-protection' ),
-			'ssn'      => __( 'Social Security Numbers', 'piip-pii-protection' ),
-			'password' => __( 'Passwords', 'piip-pii-protection' ),
-			'token'    => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
-			'ip'       => __( 'IP Addresses', 'piip-pii-protection' ),
-			'hosting'  => __( 'Hosting Account IDs', 'piip-pii-protection' ),
-			'dob'      => __( 'Dates of Birth', 'piip-pii-protection' ),
-			'bank'     => __( 'Bank Account Numbers', 'piip-pii-protection' ),
+			'email'     => __( 'Email Addresses', 'piip-pii-protection' ),
+			'phone'     => __( 'Phone Numbers', 'piip-pii-protection' ),
+			'address'   => __( 'Addresses', 'piip-pii-protection' ),
+			'card'      => __( 'Credit Card Numbers', 'piip-pii-protection' ),
+			'ssn'       => __( 'Social Security Numbers', 'piip-pii-protection' ),
+			'password'  => __( 'Passwords', 'piip-pii-protection' ),
+			'token'     => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
+			'ip'        => __( 'IP Addresses', 'piip-pii-protection' ),
+			'hosting'   => __( 'Hosting Account IDs', 'piip-pii-protection' ),
+			'dob'       => __( 'Dates of Birth', 'piip-pii-protection' ),
+			'bank'      => __( 'Bank Account Numbers', 'piip-pii-protection' ),
+			'name_text' => __( 'Names (self-introduction phrases)', 'piip-pii-protection' ),
 		);
 
 		// Opt-in types: unchecked when the setting has never been saved.
@@ -798,6 +799,7 @@ class PIIP_Admin_Settings {
 			'mask_hosting',
 			'mask_dob',
 			'mask_bank',
+			'mask_name_text',
 		);
 
 		// Add integration checkboxes.

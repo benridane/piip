@@ -805,6 +805,11 @@ class PIIP_PII_Masker {
 			$text = $this->mask_ai_keys_in_text( $text );
 		}
 
+		// Mask name self-introductions (opt-in, off by default).
+		if ( $this->should_mask_type( 'name_text' ) ) {
+			$text = $this->mask_names_in_text( $text );
+		}
+
 		// Mask site-defined custom patterns.
 		$text = $this->mask_custom_patterns_in_text( $text );
 
@@ -886,6 +891,38 @@ class PIIP_PII_Masker {
 		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
 
 		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask name self-introductions found in text (opt-in type name_text).
+	 *
+	 * 山田太郎と申します -> 山***と申します via mask_name(). Company
+	 * self-introductions (株式会社〜と申します) are left unchanged.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with self-introduced names masked.
+	 */
+	private function mask_names_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::NAME_PATTERNS as $pattern ) {
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) {
+					if ( preg_match( PIIP_PII_Detector::NAME_EXCLUSION_PATTERN, $m[2] ) ) {
+						return $m[0]; // Company self-introductions.
+					}
+					return $m[1] . $this->mask_name( $m[2] ) . ( isset( $m[3] ) ? $m[3] : '' );
+				},
+				$text
+			);
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
 	}
 
 	/**

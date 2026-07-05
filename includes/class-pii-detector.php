@@ -486,6 +486,32 @@ class PIIP_PII_Detector {
 	);
 
 	/**
+	 * Name self-introduction patterns for free text (opt-in type name_text).
+	 *
+	 * Shared with the masker. Only strong context markers are used: the
+	 * 〜と申します family and explicit 名前/氏名 labels. Group 2 is the
+	 * name candidate; consumers must reject company self-introductions
+	 * via NAME_EXCLUSION_PATTERN.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const NAME_PATTERNS = array(
+		'self_intro' => '/((?:私は|わたしは)?)([一-龠々ヶぁ-んァ-ヴーA-Za-z][一-龠々ヶぁ-んァ-ヴー・A-Za-z]{1,9})(と申します|といいます|と言います)/u',
+		'labeled'    => '/((?:お?名前|氏名|フルネーム)[\s　]*[：:は][\s　]*)([一-龠々ヶぁ-んァ-ヴーA-Za-z・]{2,10}(?:[ 　][一-龠々ヶぁ-んァ-ヴーA-Za-z・]{1,10})?)/u',
+	);
+
+	/**
+	 * Captures that must NOT be treated as personal names.
+	 *
+	 * 会社 alone also catches truncated 株式会社/有限会社/合同会社 captures.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const NAME_EXCLUSION_PATTERN = '/会社|\(株\)|\(有\)|（株）|（有）|法人|Inc|LLC|Corp/iu';
+
+	/**
 	 * Human-readable provider labels for DEV_SECRET_PATTERNS keys.
 	 *
 	 * @since 1.6.0
@@ -1421,6 +1447,21 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find name self-introductions (opt-in type; masking is off by default).
+		foreach ( self::NAME_PATTERNS as $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[2] as $match ) {
+					if ( preg_match( self::NAME_EXCLUSION_PATTERN, $match ) ) {
+						continue; // Company self-introductions.
+					}
+					$found[] = array(
+						'type'  => 'name_text',
+						'value' => $match,
+					);
+				}
+			}
+		}
+
 		// Find site-defined custom patterns.
 		foreach ( self::get_custom_patterns() as $custom ) {
 			if ( preg_match_all( $custom['regex'], $text, $matches ) ) {
@@ -1492,20 +1533,21 @@ class PIIP_PII_Detector {
 	 */
 	public function get_confidence( $type, $value, $context = '' ) {
 		$base_confidence = array(
-			'email'    => 0.95, // Very reliable pattern.
-			'card'     => 0.95, // Luhn validation.
-			'ssn'      => 0.90, // Format + validation.
-			'ip'       => 0.95, // Very reliable pattern.
-			'phone'    => 0.70, // Can have false positives.
-			'url'      => 0.90, // Reliable pattern.
-			'hosting'  => 0.85, // Provider-specific patterns.
-			'token'    => 0.60, // Heuristic-based.
-			'password' => 0.85, // Labeled matches only.
-			'address'  => 0.80, // Prefecture + municipality + block number.
-			'name'     => 0.50, // Context-dependent.
-			'dob'      => 0.75, // Labeled matches in text; date could still be another's.
-			'bank'     => 0.85, // Labeled matches only.
-			'custom'   => 1.00, // Exact match of a site-defined pattern.
+			'email'     => 0.95, // Very reliable pattern.
+			'card'      => 0.95, // Luhn validation.
+			'ssn'       => 0.90, // Format + validation.
+			'ip'        => 0.95, // Very reliable pattern.
+			'phone'     => 0.70, // Can have false positives.
+			'url'       => 0.90, // Reliable pattern.
+			'hosting'   => 0.85, // Provider-specific patterns.
+			'token'     => 0.60, // Heuristic-based.
+			'password'  => 0.85, // Labeled matches only.
+			'address'   => 0.80, // Prefecture + municipality + block number.
+			'name'      => 0.50, // Context-dependent.
+			'name_text' => 0.60, // Strong context markers, but names are hard.
+			'dob'       => 0.75, // Labeled matches in text; date could still be another's.
+			'bank'      => 0.85, // Labeled matches only.
+			'custom'    => 1.00, // Exact match of a site-defined pattern.
 		);
 
 		$confidence = isset( $base_confidence[ $type ] ) ? $base_confidence[ $type ] : 0.5;
