@@ -419,6 +419,17 @@ class PIIP_PII_Detector {
 	);
 
 	/**
+	 * SSH/PEM/PGP private key block pattern.
+	 *
+	 * Shared with the masker. Covers RSA/EC/DSA/OPENSSH/ENCRYPTED PEM
+	 * variants and PGP "PRIVATE KEY BLOCK"; certificates cannot match.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const PRIVATE_KEY_PATTERN = '/-----BEGIN [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----[\s\S]+?-----END [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----/';
+
+	/**
 	 * Human-readable provider labels for DEV_SECRET_PATTERNS keys.
 	 *
 	 * @since 1.6.0
@@ -1286,6 +1297,17 @@ class PIIP_PII_Detector {
 					'type'     => 'token',
 					'value'    => $match,
 					'provider' => 'Bearer token',
+				);
+			}
+		}
+
+		// Find private key blocks.
+		if ( preg_match_all( self::PRIVATE_KEY_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$found[] = array(
+					'type'     => 'token',
+					'value'    => $match,
+					'provider' => 'Private key',
 				);
 			}
 		}

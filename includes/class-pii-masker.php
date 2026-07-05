@@ -729,6 +729,12 @@ class PIIP_PII_Masker {
 			return $text;
 		}
 
+		// Mask private key blocks first: their base64 body would otherwise
+		// be shredded into fragments by the 32-hex/token patterns.
+		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_private_keys_in_text( $text );
+		}
+
 		// Mask labeled passwords ("password: xxx") before generic token
 		// patterns can consume parts of the value.
 		if ( $this->should_mask_type( 'password' ) ) {
@@ -860,6 +866,23 @@ class PIIP_PII_Masker {
 		}
 
 		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask private key blocks found in text.
+	 *
+	 * The whole block is replaced: partially showing key material has no
+	 * recognition value and every line of it is sensitive.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with private key blocks masked.
+	 */
+	private function mask_private_keys_in_text( $text ) {
+		$replaced = preg_replace( PIIP_PII_Detector::PRIVATE_KEY_PATTERN, '[REDACTED]', $text );
 
 		return null === $replaced ? $text : $replaced;
 	}
