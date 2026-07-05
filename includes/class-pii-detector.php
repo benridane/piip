@@ -399,6 +399,41 @@ class PIIP_PII_Detector {
 	public const BEARER_PATTERN = '/(\bBearer\b[\s　]*[：:]?[\s　]*)([A-Za-z0-9\-_~+\/]{8,}(?:\.[A-Za-z0-9\-_~+\/=]+){0,4}=*)/u';
 
 	/**
+	 * Developer secret patterns (source hosting, chat, cloud, payment).
+	 *
+	 * Shared with the masker. The JWT pattern requires the second segment
+	 * to also start with eyJ (a JWT payload is JSON too), which makes it
+	 * near-collision-free; other JWTs are still caught contextually by
+	 * BEARER_PATTERN. sk_test_ keys are intentionally not matched.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const DEV_SECRET_PATTERNS = array(
+		'github_token'   => '/\bgh[pousr]_[A-Za-z0-9]{36,251}\b/',
+		'github_pat'     => '/\bgithub_pat_[A-Za-z0-9_]{22,255}\b/',
+		'slack_token'    => '/\bxox[baprs]-[A-Za-z0-9\-]{10,250}\b/',
+		'aws_access_key' => '/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/',
+		'stripe_key'     => '/\b[sr]k_live_[A-Za-z0-9]{16,247}\b/',
+		'jwt'            => '/\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b/',
+	);
+
+	/**
+	 * Human-readable provider labels for DEV_SECRET_PATTERNS keys.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const DEV_SECRET_PROVIDERS = array(
+		'github_token'   => 'GitHub',
+		'github_pat'     => 'GitHub',
+		'slack_token'    => 'Slack',
+		'aws_access_key' => 'AWS',
+		'stripe_key'     => 'Stripe',
+		'jwt'            => 'JWT',
+	);
+
+	/**
 	 * Detect PII type from field name and value.
 	 *
 	 * @since 1.0.0
@@ -1252,6 +1287,19 @@ class PIIP_PII_Detector {
 					'value'    => $match,
 					'provider' => 'Bearer token',
 				);
+			}
+		}
+
+		// Find developer secrets (GitHub, Slack, AWS, Stripe, JWT).
+		foreach ( self::DEV_SECRET_PATTERNS as $name => $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[0] as $match ) {
+					$found[] = array(
+						'type'     => 'token',
+						'value'    => $match,
+						'provider' => self::DEV_SECRET_PROVIDERS[ $name ],
+					);
+				}
 			}
 		}
 

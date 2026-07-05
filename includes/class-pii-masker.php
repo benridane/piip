@@ -774,8 +774,10 @@ class PIIP_PII_Masker {
 			$text = $this->mask_hosting_ids_in_text( $text );
 		}
 
-		// Mask AI API keys and tokens.
+		// Mask AI API keys and tokens. Developer secrets run first so the
+		// generic/32-hex AI patterns cannot pre-chew their substrings.
 		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_dev_secrets_in_text( $text );
 			$text = $this->mask_ai_keys_in_text( $text );
 		}
 
@@ -860,6 +862,32 @@ class PIIP_PII_Masker {
 		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
 
 		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask developer secrets found in text (GitHub, Slack, AWS, Stripe, JWT).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with developer secrets masked.
+	 */
+	private function mask_dev_secrets_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::DEV_SECRET_PATTERNS as $pattern ) {
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) {
+					return $this->mask_token( $m[0] );
+				},
+				$text
+			);
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
 	}
 
 	/**
