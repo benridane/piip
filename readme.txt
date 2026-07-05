@@ -8,11 +8,11 @@ Stable tag: 1.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically detects and masks PII in WordPress comments and forms to protect user privacy and ensure GDPR compliance.
+Automatically detects and masks PII in WordPress comments and forms to protect user privacy and support your data protection efforts.
 
 == Description ==
 
-PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in WordPress comments and community plugin content before the data is saved to your database. This helps protect user privacy and ensures GDPR compliance.
+PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in WordPress comments and community plugin content before the data is saved to your database. This helps protect user privacy and supports your compliance efforts under privacy regulations such as the GDPR. Note that PIIP is a technical tool and does not by itself make your site GDPR compliant.
 
 = Key Features =
 
@@ -125,12 +125,16 @@ No. All masking happens on the server (PHP), so it cannot be bypassed by disabli
 No. The original data is never stored. We only store:
 - The masked value
 
-= Is this GDPR compliant? =
+= Does this make my site GDPR compliant? =
 
-Yes. PIIP helps with GDPR compliance by:
-- Minimizing data collection (masking PII)
+No plugin can make a site GDPR compliant by itself. Compliance depends on how your site collects, processes, and stores personal data as a whole, and may require legal advice.
+
+PIIP supports your compliance efforts by:
+- Minimizing stored personal data (masking PII before it is saved)
 - No third-party data sharing (everything stays on your server)
 - No detailed logging to protect user privacy
+
+Also note that detection is pattern-based and may not catch every piece of personal information, so do not rely on it as your only safeguard.
 
 == Screenshots ==
 
