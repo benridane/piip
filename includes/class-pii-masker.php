@@ -599,17 +599,26 @@ class PIIP_PII_Masker {
 	 * Mask token/API key.
 	 *
 	 * @since 1.0.0
+	 * @since 1.6.0 Tokens shorter than 32 characters are no longer passed
+	 *              through unmasked: 12-31 chars keep only the first 4
+	 *              (provider prefix hint), anything shorter becomes ***.
 	 *
 	 * @param string $token Token to mask.
 	 * @return string Masked token.
 	 */
 	public function mask_token( $token ) {
-		if ( strlen( $token ) < 32 ) {
-			return $token;
+		$length = strlen( $token );
+
+		if ( $length >= 32 ) {
+			// Show first 4 and last 4 characters.
+			return substr( $token, 0, 4 ) . str_repeat( '*', $length - 8 ) . substr( $token, -4 );
 		}
 
-		// Show first 4 and last 4 characters.
-		return substr( $token, 0, 4 ) . str_repeat( '*', strlen( $token ) - 8 ) . substr( $token, -4 );
+		if ( $length >= 12 ) {
+			return substr( $token, 0, 4 ) . '***';
+		}
+
+		return '***';
 	}
 
 	/**
