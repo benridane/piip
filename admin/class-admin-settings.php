@@ -382,7 +382,7 @@ class PIIP_Admin_Settings {
 			'card'      => __( 'Credit Card Numbers', 'piip-pii-protection' ),
 			'ssn'       => __( 'Social Security Numbers', 'piip-pii-protection' ),
 			'password'  => __( 'Passwords', 'piip-pii-protection' ),
-			'token'     => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
+			'token'     => __( 'API Keys, Tokens & Secrets', 'piip-pii-protection' ),
 			'ip'        => __( 'IP Addresses', 'piip-pii-protection' ),
 			'hosting'   => __( 'Hosting Account IDs', 'piip-pii-protection' ),
 			'dob'       => __( 'Dates of Birth', 'piip-pii-protection' ),
