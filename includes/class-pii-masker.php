@@ -749,6 +749,17 @@ class PIIP_PII_Masker {
 			$text = $this->mask_bearer_tokens_in_text( $text );
 		}
 
+		// Mask labeled dates of birth before generic numeric maskers.
+		if ( $this->should_mask_type( 'dob' ) ) {
+			$text = $this->mask_dob_in_text( $text );
+		}
+
+		// Mask labeled bank account numbers. Must run before the phone
+		// masker: 0-leading account numbers match the jp_landline pattern.
+		if ( $this->should_mask_type( 'bank' ) ) {
+			$text = $this->mask_bank_in_text( $text );
+		}
+
 		// Mask Japanese addresses and labeled postal codes. Must run before
 		// the phone masker: 0-leading postal codes like 〒060-0001 match the
 		// jp_landline pattern, which would leak the last four digits.
@@ -875,6 +886,80 @@ class PIIP_PII_Masker {
 		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
 
 		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask a date of birth value.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $date Date value to mask.
+	 * @return string Masked date.
+	 */
+	public function mask_dob( $date ) {
+		if ( false !== mb_strpos( $date, '年' ) ) {
+			return '****年**月**日';
+		}
+
+		return '****-**-**';
+	}
+
+	/**
+	 * Mask labeled dates of birth found in text (label kept).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with labeled dates of birth masked.
+	 */
+	private function mask_dob_in_text( $text ) {
+		$replaced = preg_replace_callback(
+			PIIP_PII_Detector::LABELED_DOB_PATTERN,
+			function ( $m ) {
+				return $m[1] . $this->mask_dob( $m[2] );
+			},
+			$text
+		);
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask a bank account number, keeping the last 4 digits.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $account Account number to mask.
+	 * @return string Masked account number.
+	 */
+	public function mask_bank( $account ) {
+		return '***' . mb_substr( $account, -4 );
+	}
+
+	/**
+	 * Mask labeled bank account numbers found in text (label kept).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with labeled account numbers masked.
+	 */
+	private function mask_bank_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::BANK_PATTERNS as $pattern ) {
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) {
+					return $m[1] . $this->mask_bank( $m[2] );
+				},
+				$text
+			);
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
 	}
 
 	/**

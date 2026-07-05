@@ -385,6 +385,8 @@ class PIIP_Admin_Settings {
 			'token'    => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
 			'ip'       => __( 'IP Addresses', 'piip-pii-protection' ),
 			'hosting'  => __( 'Hosting Account IDs', 'piip-pii-protection' ),
+			'dob'      => __( 'Dates of Birth', 'piip-pii-protection' ),
+			'bank'     => __( 'Bank Account Numbers', 'piip-pii-protection' ),
 		);
 
 		// Opt-in types: unchecked when the setting has never been saved.
@@ -794,6 +796,8 @@ class PIIP_Admin_Settings {
 			'mask_token',
 			'mask_ip',
 			'mask_hosting',
+			'mask_dob',
+			'mask_bank',
 		);
 
 		// Add integration checkboxes.

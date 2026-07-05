@@ -458,6 +458,34 @@ class PIIP_PII_Detector {
 	public const JP_POSTAL_LABELED_PATTERN = '/((?:〒|郵便番号)[\s　]*[：:]?[\s　]*)([0-9０-９]{3}[-‐−ー―－]?[0-9０-９]{4})(?![0-9０-９])/u';
 
 	/**
+	 * Labeled date-of-birth pattern for free text.
+	 *
+	 * Shared with the masker. The date alternation mirrors the formats in
+	 * $date_patterns (era, 年月日, ISO, slash); only dates preceded by a
+	 * birth-date label match, so ordinary dates in prose are untouched.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const LABELED_DOB_PATTERN = '/((?<![A-Za-z])(?:生年月日|誕生日|birth[\s　]?date|date\s+of\s+birth|dob)[\s　]*[：:は]?[\s　]*)((?:明治|大正|昭和|平成|令和)[0-9０-９]{1,2}年[0-9０-９]{1,2}月[0-9０-９]{1,2}日|[0-9０-９]{4}年[0-9０-９]{1,2}月[0-9０-９]{1,2}日|[0-9]{4}[-\/][0-9]{1,2}[-\/][0-9]{1,2}|[0-9]{1,2}[-\/][0-9]{1,2}[-\/][0-9]{2,4})/iu';
+
+	/**
+	 * Labeled Japanese bank account number patterns for free text.
+	 *
+	 * Shared with the masker. The 口座番号 label itself is the context;
+	 * the passbook form (普通/当座) requires exactly 7 digits (the
+	 * standard JP account length). Trailing digit lookaheads keep longer
+	 * numbers (order numbers etc.) from matching.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const BANK_PATTERNS = array(
+		'labeled_account' => '/(口座番号[\s　]*[：:は]?[\s　]*)([0-9０-９]{6,8})(?![0-9０-９])/u',
+		'passbook_style'  => '/((?:普通|当座)(?:預金|口座)?[\s　]*[：:]?[\s　]*)([0-9０-９]{7})(?![0-9０-９])/u',
+	);
+
+	/**
 	 * Human-readable provider labels for DEV_SECRET_PATTERNS keys.
 	 *
 	 * @since 1.6.0
@@ -1353,6 +1381,28 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find labeled dates of birth.
+		if ( preg_match_all( self::LABELED_DOB_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				$found[] = array(
+					'type'  => 'dob',
+					'value' => $match,
+				);
+			}
+		}
+
+		// Find labeled bank account numbers.
+		foreach ( self::BANK_PATTERNS as $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[2] as $match ) {
+					$found[] = array(
+						'type'  => 'bank',
+						'value' => $match,
+					);
+				}
+			}
+		}
+
 		// Find Japanese street addresses and labeled postal codes.
 		if ( preg_match_all( self::JP_ADDRESS_PATTERN, $text, $matches ) ) {
 			foreach ( $matches[0] as $match ) {
@@ -1453,7 +1503,8 @@ class PIIP_PII_Detector {
 			'password' => 0.85, // Labeled matches only.
 			'address'  => 0.80, // Prefecture + municipality + block number.
 			'name'     => 0.50, // Context-dependent.
-			'dob'      => 0.60, // Date could be anything.
+			'dob'      => 0.75, // Labeled matches in text; date could still be another's.
+			'bank'     => 0.85, // Labeled matches only.
 			'custom'   => 1.00, // Exact match of a site-defined pattern.
 		);
 
