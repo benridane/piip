@@ -749,6 +749,13 @@ class PIIP_PII_Masker {
 			$text = $this->mask_bearer_tokens_in_text( $text );
 		}
 
+		// Mask Japanese addresses and labeled postal codes. Must run before
+		// the phone masker: 0-leading postal codes like 〒060-0001 match the
+		// jp_landline pattern, which would leak the last four digits.
+		if ( $this->should_mask_type( 'address' ) ) {
+			$text = $this->mask_addresses_in_text( $text );
+		}
+
 		// Mask emails (high confidence).
 		if ( $this->should_mask_type( 'email' ) ) {
 			$text = $this->mask_emails_in_text( $text );
@@ -866,6 +873,30 @@ class PIIP_PII_Masker {
 		}
 
 		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask Japanese street addresses and labeled postal codes in text.
+	 *
+	 * Addresses keep only the prefecture (東京都新宿区西新宿2-8-1 ->
+	 * 東京都***), mirroring mask_address()'s keep-first-part style while
+	 * guaranteeing the whole span is replaced. Labeled postal codes keep
+	 * the marker (〒123-4567 -> 〒***-****).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with addresses masked.
+	 */
+	private function mask_addresses_in_text( $text ) {
+		$replaced = preg_replace( PIIP_PII_Detector::JP_ADDRESS_PATTERN, '$1***', $text );
+		if ( null !== $replaced ) {
+			$text = $replaced;
+		}
+
+		$replaced = preg_replace( PIIP_PII_Detector::JP_POSTAL_LABELED_PATTERN, '$1***-****', $text );
 
 		return null === $replaced ? $text : $replaced;
 	}

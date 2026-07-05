@@ -430,6 +430,34 @@ class PIIP_PII_Detector {
 	public const PRIVATE_KEY_PATTERN = '/-----BEGIN [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----[\s\S]+?-----END [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----/';
 
 	/**
+	 * Japanese street address pattern for free text.
+	 *
+	 * Shared with the masker. Structure: explicit 47-prefecture
+	 * alternation (group 1) -> 1-3 municipality segments ending in
+	 * 市/区/町/村/郡 -> up to 20 chars of locality -> a REQUIRED numeric
+	 * tail (丁目/番地/番/号 forms or a hyphenated digit run like 2-8-1,
+	 * full-width digits and the hyphen family included). The numeric-tail
+	 * requirement is what keeps mere place mentions (東京都に行きました,
+	 * 千葉県産) from matching.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const JP_ADDRESS_PATTERN = '/(北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)(?:[一-龠々ぁ-んァ-ヶー]{1,10}?[市区町村郡]){1,3}[一-龠々ぁ-んァ-ヶー0-9０-９]{0,20}?(?:[0-9０-９]{1,4}丁目(?:[0-9０-９]{1,4}番地?)?(?:[0-9０-９]{1,4}号)?|[0-9０-９]{1,4}(?:番地?|号)(?:[0-9０-９]{1,4}号)?|[0-9０-９]{1,4}(?:[-‐−ー―－][0-9０-９]{1,4}){1,3})/u';
+
+	/**
+	 * Labeled Japanese postal code pattern (〒 or 郵便番号 marker required).
+	 *
+	 * Shared with the masker. A bare 123-4567 is indistinguishable from a
+	 * local phone number, so the marker is mandatory. The digit lookahead
+	 * replaces \b, which is unreliable around full-width digits.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const JP_POSTAL_LABELED_PATTERN = '/((?:〒|郵便番号)[\s　]*[：:]?[\s　]*)([0-9０-９]{3}[-‐−ー―－]?[0-9０-９]{4})(?![0-9０-９])/u';
+
+	/**
 	 * Human-readable provider labels for DEV_SECRET_PATTERNS keys.
 	 *
 	 * @since 1.6.0
@@ -1325,6 +1353,24 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find Japanese street addresses and labeled postal codes.
+		if ( preg_match_all( self::JP_ADDRESS_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$found[] = array(
+					'type'  => 'address',
+					'value' => $match,
+				);
+			}
+		}
+		if ( preg_match_all( self::JP_POSTAL_LABELED_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				$found[] = array(
+					'type'  => 'address',
+					'value' => $match,
+				);
+			}
+		}
+
 		// Find site-defined custom patterns.
 		foreach ( self::get_custom_patterns() as $custom ) {
 			if ( preg_match_all( $custom['regex'], $text, $matches ) ) {
@@ -1405,6 +1451,7 @@ class PIIP_PII_Detector {
 			'hosting'  => 0.85, // Provider-specific patterns.
 			'token'    => 0.60, // Heuristic-based.
 			'password' => 0.85, // Labeled matches only.
+			'address'  => 0.80, // Prefecture + municipality + block number.
 			'name'     => 0.50, // Context-dependent.
 			'dob'      => 0.60, // Date could be anything.
 			'custom'   => 1.00, // Exact match of a site-defined pattern.
