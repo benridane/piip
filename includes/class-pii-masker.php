@@ -735,6 +735,14 @@ class PIIP_PII_Masker {
 			$text = $this->mask_labeled_passwords_in_text( $text );
 		}
 
+		// Mask Basic auth credentials. Must run before the email masker,
+		// which would otherwise rewrite user:pass@host userinfo as an
+		// email address and leak the password's first character.
+		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_basic_auth_in_text( $text );
+			$text = $this->mask_bearer_tokens_in_text( $text );
+		}
+
 		// Mask emails (high confidence).
 		if ( $this->should_mask_type( 'email' ) ) {
 			$text = $this->mask_emails_in_text( $text );
@@ -813,6 +821,66 @@ class PIIP_PII_Masker {
 	 */
 	private function mask_labeled_passwords_in_text( $text ) {
 		$replaced = preg_replace( PIIP_PII_Detector::LABELED_PASSWORD_PATTERN, '$1[REDACTED]', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask HTTP Basic auth credentials found in text.
+	 *
+	 * Covers curl -u user:pass (password redacted, username kept),
+	 * Authorization: Basic base64 (prefix kept, no tail - the base64 tail
+	 * decodes to the end of user:pass), and scheme://user:pass@host
+	 * (password only).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with Basic auth credentials masked.
+	 */
+	private function mask_basic_auth_in_text( $text ) {
+		$patterns = PIIP_PII_Detector::BASIC_AUTH_PATTERNS;
+
+		$replaced = preg_replace( $patterns['curl_user'], '$1$2:[REDACTED]', $text );
+		if ( null !== $replaced ) {
+			$text = $replaced;
+		}
+
+		$replaced = preg_replace_callback(
+			$patterns['auth_basic'],
+			function ( $m ) {
+				return $m[1] . substr( $m[2], 0, 4 ) . '***';
+			},
+			$text
+		);
+		if ( null !== $replaced ) {
+			$text = $replaced;
+		}
+
+		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask Bearer tokens found in text (including JWTs).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with Bearer tokens masked.
+	 */
+	private function mask_bearer_tokens_in_text( $text ) {
+		$replaced = preg_replace_callback(
+			PIIP_PII_Detector::BEARER_PATTERN,
+			function ( $m ) {
+				if ( ! preg_match( '/[0-9\-_+\/=.]/', $m[2] ) ) {
+					return $m[0]; // Plain words like "Bearer authentication".
+				}
+				return $m[1] . $this->mask_token( $m[2] );
+			},
+			$text
+		);
 
 		return null === $replaced ? $text : $replaced;
 	}

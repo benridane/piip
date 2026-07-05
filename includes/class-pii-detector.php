@@ -364,7 +364,39 @@ class PIIP_PII_Detector {
 	 * @since 1.6.0
 	 * @var string
 	 */
-	public const LABELED_PASSWORD_PATTERN = '/((?<![A-Za-z0-9_])(?:password|passwd|pwd|パスワード|暗証番号)[\s　]*[::=は][\s　]*)([\x21-\x7E]{4,64})/iu';
+	public const LABELED_PASSWORD_PATTERN = '/((?<![A-Za-z0-9_])(?:password|passwd|pwd|パスワード|暗証番号)[\s　]*[：:=は][\s　]*)([\x21-\x7E]{4,64})/iu';
+
+	/**
+	 * HTTP Basic auth credential patterns for free text.
+	 *
+	 * Shared with the masker. Capture groups: the password is group 3
+	 * except for auth_basic, where the base64 blob is group 2.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const BASIC_AUTH_PATTERNS = array(
+		// curl -u user:pass / curl --user user:pass
+		'curl_user'    => '/(\bcurl\b[^\r\n]{0,200}?(?:-u|--user)[ =]+["\']?)([^\s:"\'@]{1,64}):([^\s"\']{1,64})/',
+		// Authorization: Basic dXNlcjpwYXNz
+		// Note: the colon class is full-width-first ([：:]) because a class
+		// starting with "[:" is parsed as a POSIX named class by PCRE.
+		'auth_basic'   => '/(\bAuthorization[\s　]*[：:][\s　]*Basic\s+)([A-Za-z0-9+\/]{8,}={0,2})/iu',
+		// scheme://user:pass@host
+		'url_userinfo' => '/(\b[a-z][a-z0-9+.\-]{1,20}:\/\/)([^\s\/:@]{1,64}):([^\s\/@]{1,64})@/i',
+	);
+
+	/**
+	 * Bearer token pattern for free text (covers JWTs via dot segments).
+	 *
+	 * Shared with the masker. The \b after "Bearer" structurally requires
+	 * a separator; consumers must still reject all-alphabetic captures
+	 * ("Bearer authentication").
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const BEARER_PATTERN = '/(\bBearer\b[\s　]*[：:]?[\s　]*)([A-Za-z0-9\-_~+\/]{8,}(?:\.[A-Za-z0-9\-_~+\/=]+){0,4}=*)/u';
 
 	/**
 	 * Detect PII type from field name and value.
@@ -1191,6 +1223,34 @@ class PIIP_PII_Detector {
 				$found[] = array(
 					'type'  => 'password',
 					'value' => $match,
+				);
+			}
+		}
+
+		// Find HTTP Basic auth credentials (curl -u, Authorization: Basic, URL userinfo).
+		foreach ( self::BASIC_AUTH_PATTERNS as $name => $pattern ) {
+			$secret_group = 'auth_basic' === $name ? 2 : 3;
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[ $secret_group ] as $match ) {
+					$found[] = array(
+						'type'     => 'token',
+						'value'    => $match,
+						'provider' => 'Basic auth',
+					);
+				}
+			}
+		}
+
+		// Find Bearer tokens (including JWTs).
+		if ( preg_match_all( self::BEARER_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				if ( ! preg_match( '/[0-9\-_+\/=.]/', $match ) ) {
+					continue; // Plain words like "Bearer authentication".
+				}
+				$found[] = array(
+					'type'     => 'token',
+					'value'    => $match,
+					'provider' => 'Bearer token',
 				);
 			}
 		}
