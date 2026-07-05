@@ -571,11 +571,139 @@ class PIIP_Hook_Tester {
             $this->log_test( 'pii_detection', 'FAIL', 'PII detection error: ' . $e->getMessage() );
         }
         
-        wp_send_json_success( array( 
-            'message' => 'All tests completed successfully', 
+        // Test 8+: table-driven free-text masking cases (1.6.0 types).
+        $this->run_free_text_table_tests();
+
+        wp_send_json_success( array(
+            'message' => 'All tests completed successfully',
             'results' => $this->test_results,
             'total_tests' => count( $this->test_results )
         ) );
+    }
+
+    /**
+     * Table-driven free-text masking tests.
+     *
+     * Each case runs through piip_mask_text(). Positive cases assert that
+     * every secret fragment is gone (must_not_contain) and every keep
+     * marker survives (must_contain); negative cases assert the text is
+     * completely unchanged (same).
+     *
+     * @since 1.6.0
+     */
+    private function run_free_text_table_tests() {
+        $cases = array(
+            // --- Addresses / postal codes ---
+            'addr_full'        => array( 'in' => '住所は東京都新宿区西新宿2-8-1です', 'not' => array( '新宿区', '2-8-1' ), 'has' => array( '東京都***' ) ),
+            'addr_sapporo'     => array( 'in' => '北海道札幌市中央区北1条西2丁目', 'not' => array( '札幌市' ), 'has' => array( '北海道***' ) ),
+            'addr_fullwidth'   => array( 'in' => '大阪府大阪市北区梅田３−１−３', 'not' => array( '梅田' ) ),
+            'postal_marker'    => array( 'in' => '〒060-0001 に送付', 'not' => array( '060-0001' ), 'has' => array( '〒***-****' ) ),
+            'postal_labeled'   => array( 'in' => '郵便番号: 123-4567', 'not' => array( '123-4567' ), 'has' => array( '***-****' ) ),
+            'addr_mention1'    => array( 'in' => '千葉県産の落花生です', 'same' => true ),
+            'addr_mention2'    => array( 'in' => '東京都に行きました', 'same' => true ),
+            'addr_mention3'    => array( 'in' => '京都府警が発表しました', 'same' => true ),
+            'addr_no_number'   => array( 'in' => '東京都渋谷区で開催します', 'same' => true ),
+            'postal_bare'      => array( 'in' => '123-4567', 'same' => true ),
+            'blood_pressure'   => array( 'in' => '血圧は120-80でした', 'same' => true ),
+            // --- Labeled passwords ---
+            'password_ascii'   => array( 'in' => 'password: hunter2secret', 'not' => array( 'hunter2secret' ), 'has' => array( '[REDACTED]' ) ),
+            'password_jp'      => array( 'in' => 'パスワードはP@ssw0rd!です', 'not' => array( 'P@ssw0rd!' ) ),
+            'password_pin'     => array( 'in' => '暗証番号:1234', 'not' => array( ':1234' ) ),
+            'password_forgot'  => array( 'in' => 'パスワードを忘れました', 'same' => true ),
+            'password_forgot2' => array( 'in' => 'パスワードは忘れました', 'same' => true ),
+            'password_reset'   => array( 'in' => 'password reset link', 'same' => true ),
+            // --- Basic auth / Bearer ---
+            'curl_user'        => array( 'in' => 'curl -u admin:S3cretPass https://api.example.com', 'not' => array( 'S3cretPass' ), 'has' => array( 'admin:[REDACTED]' ) ),
+            'auth_basic'       => array( 'in' => 'Authorization: Basic dXNlcjpwYXNzd29yZDEyMw==', 'not' => array( 'cjpwYXNzd29yZDEyMw' ) ),
+            'url_userinfo'     => array( 'in' => 'https://alice:hunter22@example.com/path', 'not' => array( 'hunter22' ), 'has' => array( 'alice:***@example.com' ) ),
+            'bearer_jwt'       => array( 'in' => 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dGVzdHNpZ25hdHVyZQ', 'not' => array( 'eyJzdWIiOiIxMjM0NTY3ODkwIn0' ) ),
+            'bearer_short'     => array( 'in' => 'Bearer: abc123token9', 'not' => array( 'abc123token9' ) ),
+            'bearer_word'      => array( 'in' => 'Bearer authentication required', 'same' => true ),
+            'bearer_word2'     => array( 'in' => 'Bearer of bad news arrived', 'same' => true ),
+            'ratio'            => array( 'in' => 'The ratio is 3:4 in http contexts', 'same' => true ),
+            // --- Developer secrets ---
+            'github_token'     => array( 'in' => 'ghp_Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1', 'not' => array( 'Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab' ) ),
+            'slack_token'      => array( 'in' => 'xoxb-' . '1234567890-abcdefghij1234', 'not' => array( '1234567890-abcdefghij' ) ),
+            'aws_key'          => array( 'in' => 'key AKIAIOSFODNN7EXAMPLE used', 'not' => array( 'IOSFODNN7EXAMPLE' ), 'has' => array( 'AKIA***' ) ),
+            'stripe_key'       => array( 'in' => 'sk_live_' . '4eC39HqLyjWDarjtT1zdp7dc', 'not' => array( 'HqLyjWDarjtT1zdp' ) ),
+            'jwt_bare'         => array( 'in' => 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MiJ9.c2lnbmF0dXJlMTIz', 'not' => array( 'eyJzdWIiOiI0MiJ9' ) ),
+            'aws_short'        => array( 'in' => 'AKIA1234', 'same' => true ),
+            'github_short'     => array( 'in' => 'ghp_tooshort', 'same' => true ),
+            'stripe_test'      => array( 'in' => 'sk_test_abcdefghij123456', 'same' => true ),
+            // --- Private keys ---
+            'pem_block'        => array( 'in' => "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA1234\n-----END RSA PRIVATE KEY-----", 'not' => array( 'MIIEow' ), 'has' => array( '[REDACTED]' ) ),
+            'certificate'      => array( 'in' => '-----BEGIN CERTIFICATE-----abc-----END CERTIFICATE-----', 'same' => true ),
+            // --- DOB / bank ---
+            'dob_iso'          => array( 'in' => '生年月日:1990-01-15', 'not' => array( '1990-01-15' ), 'has' => array( '****-**-**' ) ),
+            'dob_kanji'        => array( 'in' => '誕生日は1985年3月2日です', 'not' => array( '1985年3月2日' ), 'has' => array( '****年**月**日' ) ),
+            'dob_greeting'     => array( 'in' => '誕生日おめでとう', 'same' => true ),
+            'date_plain'       => array( 'in' => '会議は2026-07-05に開催', 'same' => true ),
+            'bank_labeled'     => array( 'in' => '口座番号:1234567', 'not' => array( ':1234567' ), 'has' => array( '***4567' ) ),
+            'bank_passbook'    => array( 'in' => '三菱UFJ銀行 普通 7654321', 'not' => array( ' 7654321' ), 'has' => array( '***4321' ) ),
+            'order_number'     => array( 'in' => '注文番号:12345678', 'same' => true ),
+            'bank_too_long'    => array( 'in' => '口座番号:123456789', 'same' => true ),
+            // --- name_text default OFF ---
+            'name_default_off' => array( 'in' => '私は山田太郎と申します', 'same' => true ),
+            // --- Regression: 1.5.0 behavior ---
+            'regression_mixed' => array( 'in' => 'Contact test@example.com or call 090-1234-5678, card 4532-7295-8010-4414, IP 192.168.1.100', 'not' => array( 'test@example.com', '090-1234-5678', '4532-7295-8010-4414', '192.168.1.100' ) ),
+        );
+
+        $failures = 0;
+        foreach ( $cases as $name => $case ) {
+            $out = piip_mask_text( $case['in'] );
+            $ok  = true;
+            $why = '';
+
+            if ( ! empty( $case['same'] ) ) {
+                if ( $out !== $case['in'] ) {
+                    $ok  = false;
+                    $why = 'changed to: ' . $out;
+                }
+            } else {
+                foreach ( $case['not'] as $fragment ) {
+                    if ( false !== strpos( $out, $fragment ) ) {
+                        $ok  = false;
+                        $why = 'leaked "' . $fragment . '" in: ' . $out;
+                        break;
+                    }
+                }
+                if ( $ok && ! empty( $case['has'] ) ) {
+                    foreach ( $case['has'] as $fragment ) {
+                        if ( false === strpos( $out, $fragment ) ) {
+                            $ok  = false;
+                            $why = 'missing "' . $fragment . '" in: ' . $out;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ( ! $ok ) {
+                $failures++;
+            }
+            $this->log_test( 'text_' . $name, $ok ? 'PASS' : 'FAIL', $ok ? 'ok' : $why );
+        }
+
+        // Idempotency: masking already-masked text must be a no-op.
+        $mixed = '〒060-0001 password: hunter2secret mail test@example.com 東京都新宿区西新宿2-8-1';
+        $once  = piip_mask_text( $mixed );
+        $twice = piip_mask_text( $once );
+        $this->log_test( 'text_idempotency', $once === $twice ? 'PASS' : 'FAIL', $once === $twice ? 'ok' : $once . ' != ' . $twice );
+
+        // name_text masks when explicitly enabled (fresh masker; the
+        // plugin instance cached its settings at init).
+        $saved                     = get_option( 'piip_settings', array() );
+        $enabled                   = is_array( $saved ) ? $saved : array();
+        $enabled['mask_name_text'] = 1;
+        update_option( 'piip_settings', $enabled );
+        $masker   = new PIIP_PII_Masker();
+        $intro    = $masker->mask_text_simple( '私は山田太郎と申します' );
+        $company  = $masker->mask_text_simple( '株式会社テスト商事と申します' );
+        update_option( 'piip_settings', $saved );
+
+        $name_ok = false === strpos( $intro, '山田太郎' );
+        $this->log_test( 'text_name_enabled', $name_ok ? 'PASS' : 'FAIL', $intro );
+        $this->log_test( 'text_name_company', '株式会社テスト商事と申します' === $company ? 'PASS' : 'FAIL', $company );
     }
 }
 
