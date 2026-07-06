@@ -436,14 +436,16 @@ class PIIP_PII_Detector {
 	 * alternation (group 1) -> 1-3 municipality segments ending in
 	 * 市/区/町/村/郡 -> up to 20 chars of locality -> a REQUIRED numeric
 	 * tail (丁目/番地/番/号 forms or a hyphenated digit run like 2-8-1,
-	 * full-width digits and the hyphen family included). The numeric-tail
+	 * full-width digits and the hyphen family included). After 丁目 an
+	 * optional space is allowed before the block/lot part, which may be
+	 * 番地/号 style or a hyphenated run (3丁目 1-1). The numeric-tail
 	 * requirement is what keeps mere place mentions (東京都に行きました,
 	 * 千葉県産) from matching.
 	 *
 	 * @since 1.6.0
 	 * @var string
 	 */
-	public const JP_ADDRESS_PATTERN = '/(北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)(?:[一-龠々ぁ-んァ-ヶー]{1,10}?[市区町村郡]){1,3}[一-龠々ぁ-んァ-ヶー0-9０-９]{0,20}?(?:[0-9０-９]{1,4}丁目(?:[0-9０-９]{1,4}番地?)?(?:[0-9０-９]{1,4}号)?|[0-9０-９]{1,4}(?:番地?|号)(?:[0-9０-９]{1,4}号)?|[0-9０-９]{1,4}(?:[-‐−ー―－][0-9０-９]{1,4}){1,3})/u';
+	public const JP_ADDRESS_PATTERN = '/(北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)(?:[一-龠々ぁ-んァ-ヶー]{1,10}?[市区町村郡]){1,3}[一-龠々ぁ-んァ-ヶー0-9０-９]{0,20}?(?:[0-9０-９]{1,4}丁目(?:[\s　]*[0-9０-９]{1,4}(?:(?:[-‐−ー―－][0-9０-９]{1,4}){1,3}|番地?(?:[0-9０-９]{1,4}号)?|号))?|[0-9０-９]{1,4}(?:番地?|号)(?:[0-9０-９]{1,4}号)?|[0-9０-９]{1,4}(?:[-‐−ー―－][0-9０-９]{1,4}){1,3})/u';
 
 	/**
 	 * Labeled Japanese postal code pattern (〒 or 郵便番号 marker required).
