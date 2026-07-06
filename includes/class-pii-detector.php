@@ -354,6 +354,181 @@ class PIIP_PII_Detector {
 	);
 
 	/**
+	 * Labeled password pattern for free text ("password: xxx").
+	 *
+	 * Shared with the masker. The value class is printable ASCII only,
+	 * which structurally rejects Japanese prose following the label
+	 * (e.g. パスワードは忘れました), and the lookbehind keeps the label
+	 * from matching inside identifiers.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const LABELED_PASSWORD_PATTERN = '/((?<![A-Za-z0-9_])(?:password|passwd|pwd|パスワード|暗証番号)[\s　]*[：:=は][\s　]*)([\x21-\x7E]{4,64})/iu';
+
+	/**
+	 * HTTP Basic auth credential patterns for free text.
+	 *
+	 * Shared with the masker. Capture groups: the password is group 3
+	 * except for auth_basic, where the base64 blob is group 2.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const BASIC_AUTH_PATTERNS = array(
+		// curl -u user:pass / curl --user user:pass
+		'curl_user'    => '/(\bcurl\b[^\r\n]{0,200}?(?:-u|--user)[ =]+["\']?)([^\s:"\'@]{1,64}):([^\s"\']{1,64})/',
+		// Authorization: Basic dXNlcjpwYXNz
+		// Note: the colon class is full-width-first ([：:]) because a class
+		// starting with "[:" is parsed as a POSIX named class by PCRE.
+		'auth_basic'   => '/(\bAuthorization[\s　]*[：:][\s　]*Basic\s+)([A-Za-z0-9+\/]{8,}={0,2})/iu',
+		// scheme://user:pass@host
+		'url_userinfo' => '/(\b[a-z][a-z0-9+.\-]{1,20}:\/\/)([^\s\/:@]{1,64}):([^\s\/@]{1,64})@/i',
+	);
+
+	/**
+	 * Bearer token pattern for free text (covers JWTs via dot segments).
+	 *
+	 * Shared with the masker. The \b after "Bearer" structurally requires
+	 * a separator; consumers must still reject all-alphabetic captures
+	 * ("Bearer authentication").
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const BEARER_PATTERN = '/(\bBearer\b[\s　]*[：:]?[\s　]*)([A-Za-z0-9\-_~+\/]{8,}(?:\.[A-Za-z0-9\-_~+\/=]+){0,4}=*)/u';
+
+	/**
+	 * Developer secret patterns (source hosting, chat, cloud, payment).
+	 *
+	 * Shared with the masker. The JWT pattern requires the second segment
+	 * to also start with eyJ (a JWT payload is JSON too), which makes it
+	 * near-collision-free; other JWTs are still caught contextually by
+	 * BEARER_PATTERN. sk_test_ keys are intentionally not matched.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const DEV_SECRET_PATTERNS = array(
+		'github_token'   => '/\bgh[pousr]_[A-Za-z0-9]{36,251}\b/',
+		'github_pat'     => '/\bgithub_pat_[A-Za-z0-9_]{22,255}\b/',
+		'slack_token'    => '/\bxox[baprs]-[A-Za-z0-9\-]{10,250}\b/',
+		'aws_access_key' => '/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/',
+		'stripe_key'     => '/\b[sr]k_live_[A-Za-z0-9]{16,247}\b/',
+		'jwt'            => '/\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b/',
+	);
+
+	/**
+	 * SSH/PEM/PGP private key block pattern.
+	 *
+	 * Shared with the masker. Covers RSA/EC/DSA/OPENSSH/ENCRYPTED PEM
+	 * variants and PGP "PRIVATE KEY BLOCK"; certificates cannot match.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const PRIVATE_KEY_PATTERN = '/-----BEGIN [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----[\s\S]+?-----END [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----/';
+
+	/**
+	 * Japanese street address pattern for free text.
+	 *
+	 * Shared with the masker. Structure: explicit 47-prefecture
+	 * alternation (group 1) -> 1-3 municipality segments ending in
+	 * 市/区/町/村/郡 -> up to 20 chars of locality -> a REQUIRED numeric
+	 * tail (丁目/番地/番/号 forms or a hyphenated digit run like 2-8-1,
+	 * full-width digits and the hyphen family included). After 丁目 an
+	 * optional space is allowed before the block/lot part, which may be
+	 * 番地/号 style or a hyphenated run (3丁目 1-1). The numeric-tail
+	 * requirement is what keeps mere place mentions (東京都に行きました,
+	 * 千葉県産) from matching.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const JP_ADDRESS_PATTERN = '/(北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)(?:[一-龠々ぁ-んァ-ヶー]{1,10}?[市区町村郡]){1,3}[一-龠々ぁ-んァ-ヶー0-9０-９]{0,20}?(?:[0-9０-９]{1,4}丁目(?:[\s　]*[0-9０-９]{1,4}(?:(?:[-‐−ー―－][0-9０-９]{1,4}){1,3}|番地?(?:[0-9０-９]{1,4}号)?|号))?|[0-9０-９]{1,4}(?:番地?|号)(?:[0-9０-９]{1,4}号)?|[0-9０-９]{1,4}(?:[-‐−ー―－][0-9０-９]{1,4}){1,3})/u';
+
+	/**
+	 * Labeled Japanese postal code pattern (〒 or 郵便番号 marker required).
+	 *
+	 * Shared with the masker. A bare 123-4567 is indistinguishable from a
+	 * local phone number, so the marker is mandatory. The digit lookahead
+	 * replaces \b, which is unreliable around full-width digits.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const JP_POSTAL_LABELED_PATTERN = '/((?:〒|郵便番号)[\s　]*[：:]?[\s　]*)([0-9０-９]{3}[-‐−ー―－]?[0-9０-９]{4})(?![0-9０-９])/u';
+
+	/**
+	 * Labeled date-of-birth pattern for free text.
+	 *
+	 * Shared with the masker. The date alternation mirrors the formats in
+	 * $date_patterns (era, 年月日, ISO, slash); only dates preceded by a
+	 * birth-date label match, so ordinary dates in prose are untouched.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const LABELED_DOB_PATTERN = '/((?<![A-Za-z])(?:生年月日|誕生日|birth[\s　]?date|date\s+of\s+birth|dob)[\s　]*[：:は]?[\s　]*)((?:明治|大正|昭和|平成|令和)[0-9０-９]{1,2}年[0-9０-９]{1,2}月[0-9０-９]{1,2}日|[0-9０-９]{4}年[0-9０-９]{1,2}月[0-9０-９]{1,2}日|[0-9]{4}[-\/][0-9]{1,2}[-\/][0-9]{1,2}|[0-9]{1,2}[-\/][0-9]{1,2}[-\/][0-9]{2,4})/iu';
+
+	/**
+	 * Labeled Japanese bank account number patterns for free text.
+	 *
+	 * Shared with the masker. The 口座番号 label itself is the context;
+	 * the passbook form (普通/当座) requires exactly 7 digits (the
+	 * standard JP account length). Trailing digit lookaheads keep longer
+	 * numbers (order numbers etc.) from matching.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const BANK_PATTERNS = array(
+		'labeled_account' => '/(口座番号[\s　]*[：:は]?[\s　]*)([0-9０-９]{6,8})(?![0-9０-９])/u',
+		'passbook_style'  => '/((?:普通|当座)(?:預金|口座)?[\s　]*[：:]?[\s　]*)([0-9０-９]{7})(?![0-9０-９])/u',
+	);
+
+	/**
+	 * Name self-introduction patterns for free text (opt-in type name_text).
+	 *
+	 * Shared with the masker. Only strong context markers are used: the
+	 * 〜と申します family and explicit 名前/氏名 labels. Group 2 is the
+	 * name candidate; consumers must reject company self-introductions
+	 * via NAME_EXCLUSION_PATTERN.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const NAME_PATTERNS = array(
+		'self_intro' => '/((?:私は|わたしは)?)([一-龠々ヶぁ-んァ-ヴーA-Za-z][一-龠々ヶぁ-んァ-ヴー・A-Za-z]{1,9})(と申します|といいます|と言います)/u',
+		'labeled'    => '/((?:お?名前|氏名|フルネーム)[\s　]*[：:は][\s　]*)([一-龠々ヶぁ-んァ-ヴーA-Za-z・]{2,10}(?:[ 　][一-龠々ヶぁ-んァ-ヴーA-Za-z・]{1,10})?)/u',
+	);
+
+	/**
+	 * Captures that must NOT be treated as personal names.
+	 *
+	 * 会社 alone also catches truncated 株式会社/有限会社/合同会社 captures.
+	 *
+	 * @since 1.6.0
+	 * @var string
+	 */
+	public const NAME_EXCLUSION_PATTERN = '/会社|\(株\)|\(有\)|（株）|（有）|法人|Inc|LLC|Corp/iu';
+
+	/**
+	 * Human-readable provider labels for DEV_SECRET_PATTERNS keys.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	public const DEV_SECRET_PROVIDERS = array(
+		'github_token'   => 'GitHub',
+		'github_pat'     => 'GitHub',
+		'slack_token'    => 'Slack',
+		'aws_access_key' => 'AWS',
+		'stripe_key'     => 'Stripe',
+		'jwt'            => 'JWT',
+	);
+
+	/**
 	 * Detect PII type from field name and value.
 	 *
 	 * @since 1.0.0
@@ -1102,6 +1277,13 @@ class PIIP_PII_Detector {
 
 		// Find hosting account/server IDs.
 		foreach ( $this->hosting_patterns as $name => $pattern ) {
+			// GCP project IDs are indistinguishable from ordinary lowercase
+			// words in free text and mask_text() does not mask them; the
+			// pattern only makes sense for whole field values (is_hosting_id).
+			if ( 'gcp_project' === $name ) {
+				continue;
+			}
+
 			if ( preg_match_all( $pattern, $text, $matches ) ) {
 				foreach ( $matches[0] as $match ) {
 					// Skip false positives.
@@ -1165,7 +1347,180 @@ class PIIP_PII_Detector {
 			}
 		}
 
+		// Find labeled passwords ("password: xxx").
+		if ( preg_match_all( self::LABELED_PASSWORD_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				$found[] = array(
+					'type'  => 'password',
+					'value' => $match,
+				);
+			}
+		}
+
+		// Find HTTP Basic auth credentials (curl -u, Authorization: Basic, URL userinfo).
+		foreach ( self::BASIC_AUTH_PATTERNS as $name => $pattern ) {
+			$secret_group = 'auth_basic' === $name ? 2 : 3;
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[ $secret_group ] as $match ) {
+					$found[] = array(
+						'type'     => 'token',
+						'value'    => $match,
+						'provider' => 'Basic auth',
+					);
+				}
+			}
+		}
+
+		// Find Bearer tokens (including JWTs).
+		if ( preg_match_all( self::BEARER_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				if ( ! preg_match( '/[0-9\-_+\/=.]/', $match ) ) {
+					continue; // Plain words like "Bearer authentication".
+				}
+				$found[] = array(
+					'type'     => 'token',
+					'value'    => $match,
+					'provider' => 'Bearer token',
+				);
+			}
+		}
+
+		// Find private key blocks.
+		if ( preg_match_all( self::PRIVATE_KEY_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$found[] = array(
+					'type'     => 'token',
+					'value'    => $match,
+					'provider' => 'Private key',
+				);
+			}
+		}
+
+		// Find developer secrets (GitHub, Slack, AWS, Stripe, JWT).
+		foreach ( self::DEV_SECRET_PATTERNS as $name => $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[0] as $match ) {
+					$found[] = array(
+						'type'     => 'token',
+						'value'    => $match,
+						'provider' => self::DEV_SECRET_PROVIDERS[ $name ],
+					);
+				}
+			}
+		}
+
+		// Find labeled dates of birth.
+		if ( preg_match_all( self::LABELED_DOB_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				$found[] = array(
+					'type'  => 'dob',
+					'value' => $match,
+				);
+			}
+		}
+
+		// Find labeled bank account numbers.
+		foreach ( self::BANK_PATTERNS as $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[2] as $match ) {
+					$found[] = array(
+						'type'  => 'bank',
+						'value' => $match,
+					);
+				}
+			}
+		}
+
+		// Find Japanese street addresses and labeled postal codes.
+		if ( preg_match_all( self::JP_ADDRESS_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$found[] = array(
+					'type'  => 'address',
+					'value' => $match,
+				);
+			}
+		}
+		if ( preg_match_all( self::JP_POSTAL_LABELED_PATTERN, $text, $matches ) ) {
+			foreach ( $matches[2] as $match ) {
+				$found[] = array(
+					'type'  => 'address',
+					'value' => $match,
+				);
+			}
+		}
+
+		// Find name self-introductions (opt-in type; masking is off by default).
+		foreach ( self::NAME_PATTERNS as $pattern ) {
+			if ( preg_match_all( $pattern, $text, $matches ) ) {
+				foreach ( $matches[2] as $match ) {
+					if ( preg_match( self::NAME_EXCLUSION_PATTERN, $match ) ) {
+						continue; // Company self-introductions.
+					}
+					$found[] = array(
+						'type'  => 'name_text',
+						'value' => $match,
+					);
+				}
+			}
+		}
+
+		// Find site-defined custom patterns.
+		foreach ( self::get_custom_patterns() as $custom ) {
+			if ( preg_match_all( $custom['regex'], $text, $matches ) ) {
+				foreach ( $matches[0] as $match ) {
+					$found[] = array(
+						'type'     => 'custom',
+						'value'    => $match,
+						'provider' => $custom['label'],
+					);
+				}
+			}
+		}
+
 		return $found;
+	}
+
+	/**
+	 * Get enabled, valid site-defined custom patterns from settings.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return array {
+	 *     List of custom patterns.
+	 *
+	 *     @type string $label       Human-readable pattern name.
+	 *     @type string $regex       Delimited, validated regex.
+	 *     @type string $replacement Literal replacement string.
+	 * }
+	 */
+	public static function get_custom_patterns() {
+		$settings = get_option( 'piip_settings', array() );
+		$rows     = isset( $settings['custom_patterns'] ) && is_array( $settings['custom_patterns'] )
+			? $settings['custom_patterns']
+			: array();
+
+		$patterns = array();
+
+		foreach ( $rows as $row ) {
+			if ( empty( $row['enabled'] ) || empty( $row['pattern'] ) ) {
+				continue;
+			}
+
+			$regex = '/' . str_replace( '/', '\/', $row['pattern'] ) . '/u';
+
+			// Rows are validated on save, but guard against manual edits.
+			if ( false === @preg_match( $regex, '' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Probing regex validity.
+				continue;
+			}
+
+			$patterns[] = array(
+				'label'       => isset( $row['label'] ) && '' !== $row['label'] ? $row['label'] : __( 'Custom pattern', 'piip-pii-protection' ),
+				'regex'       => $regex,
+				'replacement' => isset( $row['replacement'] ) && '' !== $row['replacement'] ? $row['replacement'] : '***',
+			);
+		}
+
+		return $patterns;
 	}
 
 	/**
@@ -1180,16 +1535,21 @@ class PIIP_PII_Detector {
 	 */
 	public function get_confidence( $type, $value, $context = '' ) {
 		$base_confidence = array(
-			'email'   => 0.95, // Very reliable pattern.
-			'card'    => 0.95, // Luhn validation.
-			'ssn'     => 0.90, // Format + validation.
-			'ip'      => 0.95, // Very reliable pattern.
-			'phone'   => 0.70, // Can have false positives.
-			'url'     => 0.90, // Reliable pattern.
-			'hosting' => 0.85, // Provider-specific patterns.
-			'token'   => 0.60, // Heuristic-based.
-			'name'    => 0.50, // Context-dependent.
-			'dob'     => 0.60, // Date could be anything.
+			'email'     => 0.95, // Very reliable pattern.
+			'card'      => 0.95, // Luhn validation.
+			'ssn'       => 0.90, // Format + validation.
+			'ip'        => 0.95, // Very reliable pattern.
+			'phone'     => 0.70, // Can have false positives.
+			'url'       => 0.90, // Reliable pattern.
+			'hosting'   => 0.85, // Provider-specific patterns.
+			'token'     => 0.60, // Heuristic-based.
+			'password'  => 0.85, // Labeled matches only.
+			'address'   => 0.80, // Prefecture + municipality + block number.
+			'name'      => 0.50, // Context-dependent.
+			'name_text' => 0.60, // Strong context markers, but names are hard.
+			'dob'       => 0.75, // Labeled matches in text; date could still be another's.
+			'bank'      => 0.85, // Labeled matches only.
+			'custom'    => 1.00, // Exact match of a site-defined pattern.
 		);
 
 		$confidence = isset( $base_confidence[ $type ] ) ? $base_confidence[ $type ] : 0.5;

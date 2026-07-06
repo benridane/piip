@@ -24,6 +24,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 class PIIP_PII_Masker {
 
 	/**
+	 * PII types that are opt-in: masked only when explicitly enabled.
+	 *
+	 * @since 1.6.0
+	 * @var array
+	 */
+	private const DEFAULT_OFF_TYPES = array( 'name_text' );
+
+	/**
 	 * PII Detector instance.
 	 *
 	 * @since 1.0.0
@@ -591,17 +599,26 @@ class PIIP_PII_Masker {
 	 * Mask token/API key.
 	 *
 	 * @since 1.0.0
+	 * @since 1.6.0 Tokens shorter than 32 characters are no longer passed
+	 *              through unmasked: 12-31 chars keep only the first 4
+	 *              (provider prefix hint), anything shorter becomes ***.
 	 *
 	 * @param string $token Token to mask.
 	 * @return string Masked token.
 	 */
 	public function mask_token( $token ) {
-		if ( strlen( $token ) < 32 ) {
-			return $token;
+		$length = strlen( $token );
+
+		if ( $length >= 32 ) {
+			// Show first 4 and last 4 characters.
+			return substr( $token, 0, 4 ) . str_repeat( '*', $length - 8 ) . substr( $token, -4 );
 		}
 
-		// Show first 4 and last 4 characters.
-		return substr( $token, 0, 4 ) . str_repeat( '*', strlen( $token ) - 8 ) . substr( $token, -4 );
+		if ( $length >= 12 ) {
+			return substr( $token, 0, 4 ) . '***';
+		}
+
+		return '***';
 	}
 
 	/**
@@ -712,6 +729,44 @@ class PIIP_PII_Masker {
 			return $text;
 		}
 
+		// Mask private key blocks first: their base64 body would otherwise
+		// be shredded into fragments by the 32-hex/token patterns.
+		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_private_keys_in_text( $text );
+		}
+
+		// Mask labeled passwords ("password: xxx") before generic token
+		// patterns can consume parts of the value.
+		if ( $this->should_mask_type( 'password' ) ) {
+			$text = $this->mask_labeled_passwords_in_text( $text );
+		}
+
+		// Mask Basic auth credentials. Must run before the email masker,
+		// which would otherwise rewrite user:pass@host userinfo as an
+		// email address and leak the password's first character.
+		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_basic_auth_in_text( $text );
+			$text = $this->mask_bearer_tokens_in_text( $text );
+		}
+
+		// Mask labeled dates of birth before generic numeric maskers.
+		if ( $this->should_mask_type( 'dob' ) ) {
+			$text = $this->mask_dob_in_text( $text );
+		}
+
+		// Mask labeled bank account numbers. Must run before the phone
+		// masker: 0-leading account numbers match the jp_landline pattern.
+		if ( $this->should_mask_type( 'bank' ) ) {
+			$text = $this->mask_bank_in_text( $text );
+		}
+
+		// Mask Japanese addresses and labeled postal codes. Must run before
+		// the phone masker: 0-leading postal codes like 〒060-0001 match the
+		// jp_landline pattern, which would leak the last four digits.
+		if ( $this->should_mask_type( 'address' ) ) {
+			$text = $this->mask_addresses_in_text( $text );
+		}
+
 		// Mask emails (high confidence).
 		if ( $this->should_mask_type( 'email' ) ) {
 			$text = $this->mask_emails_in_text( $text );
@@ -734,19 +789,304 @@ class PIIP_PII_Masker {
 		}
 
 		// Mask IP addresses.
-		$text = $this->mask_ip_addresses_in_text( $text );
+		if ( $this->should_mask_type( 'ip' ) ) {
+			$text = $this->mask_ip_addresses_in_text( $text );
+		}
 
 		// Mask hosting account/server IDs.
 		if ( $this->should_mask_type( 'hosting' ) ) {
 			$text = $this->mask_hosting_ids_in_text( $text );
 		}
 
-		// Mask AI API keys and tokens.
+		// Mask AI API keys and tokens. Developer secrets run first so the
+		// generic/32-hex AI patterns cannot pre-chew their substrings.
 		if ( $this->should_mask_type( 'token' ) ) {
+			$text = $this->mask_dev_secrets_in_text( $text );
 			$text = $this->mask_ai_keys_in_text( $text );
 		}
 
+		// Mask name self-introductions (opt-in, off by default).
+		if ( $this->should_mask_type( 'name_text' ) ) {
+			$text = $this->mask_names_in_text( $text );
+		}
+
+		// Mask site-defined custom patterns.
+		$text = $this->mask_custom_patterns_in_text( $text );
+
 		return $text;
+	}
+
+	/**
+	 * Mask site-defined custom patterns found in text.
+	 *
+	 * Patterns are managed on the settings page and validated on save;
+	 * each match is replaced with the pattern's literal replacement string.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with custom patterns masked.
+	 */
+	private function mask_custom_patterns_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::get_custom_patterns() as $custom ) {
+			// Escape backslashes and dollar signs so the replacement stays literal.
+			$replaced = preg_replace( $custom['regex'], addcslashes( $custom['replacement'], '\\$' ), $text );
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Mask labeled password values found in text ("password: xxx").
+	 *
+	 * Keeps the label and separator, replaces the value with [REDACTED].
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with labeled passwords masked.
+	 */
+	private function mask_labeled_passwords_in_text( $text ) {
+		$replaced = preg_replace( PIIP_PII_Detector::LABELED_PASSWORD_PATTERN, '$1[REDACTED]', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask HTTP Basic auth credentials found in text.
+	 *
+	 * Covers curl -u user:pass (password redacted, username kept),
+	 * Authorization: Basic base64 (prefix kept, no tail - the base64 tail
+	 * decodes to the end of user:pass), and scheme://user:pass@host
+	 * (password only).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with Basic auth credentials masked.
+	 */
+	private function mask_basic_auth_in_text( $text ) {
+		$patterns = PIIP_PII_Detector::BASIC_AUTH_PATTERNS;
+
+		$replaced = preg_replace( $patterns['curl_user'], '$1$2:[REDACTED]', $text );
+		if ( null !== $replaced ) {
+			$text = $replaced;
+		}
+
+		$replaced = preg_replace_callback(
+			$patterns['auth_basic'],
+			function ( $m ) {
+				return $m[1] . substr( $m[2], 0, 4 ) . '***';
+			},
+			$text
+		);
+		if ( null !== $replaced ) {
+			$text = $replaced;
+		}
+
+		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask name self-introductions found in text (opt-in type name_text).
+	 *
+	 * 山田太郎と申します -> 山***と申します via mask_name(). Company
+	 * self-introductions (株式会社〜と申します) are left unchanged.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with self-introduced names masked.
+	 */
+	private function mask_names_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::NAME_PATTERNS as $pattern ) {
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) {
+					if ( preg_match( PIIP_PII_Detector::NAME_EXCLUSION_PATTERN, $m[2] ) ) {
+						return $m[0]; // Company self-introductions.
+					}
+					return $m[1] . $this->mask_name( $m[2] ) . ( isset( $m[3] ) ? $m[3] : '' );
+				},
+				$text
+			);
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Mask a date of birth value.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $date Date value to mask.
+	 * @return string Masked date.
+	 */
+	public function mask_dob( $date ) {
+		if ( false !== mb_strpos( $date, '年' ) ) {
+			return '****年**月**日';
+		}
+
+		return '****-**-**';
+	}
+
+	/**
+	 * Mask labeled dates of birth found in text (label kept).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with labeled dates of birth masked.
+	 */
+	private function mask_dob_in_text( $text ) {
+		$replaced = preg_replace_callback(
+			PIIP_PII_Detector::LABELED_DOB_PATTERN,
+			function ( $m ) {
+				return $m[1] . $this->mask_dob( $m[2] );
+			},
+			$text
+		);
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask a bank account number, keeping the last 4 digits.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $account Account number to mask.
+	 * @return string Masked account number.
+	 */
+	public function mask_bank( $account ) {
+		return '***' . mb_substr( $account, -4 );
+	}
+
+	/**
+	 * Mask labeled bank account numbers found in text (label kept).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with labeled account numbers masked.
+	 */
+	private function mask_bank_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::BANK_PATTERNS as $pattern ) {
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) {
+					return $m[1] . $this->mask_bank( $m[2] );
+				},
+				$text
+			);
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Mask Japanese street addresses and labeled postal codes in text.
+	 *
+	 * Addresses keep only the prefecture (東京都新宿区西新宿2-8-1 ->
+	 * 東京都***), mirroring mask_address()'s keep-first-part style while
+	 * guaranteeing the whole span is replaced. Labeled postal codes keep
+	 * the marker (〒123-4567 -> 〒***-****).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with addresses masked.
+	 */
+	private function mask_addresses_in_text( $text ) {
+		$replaced = preg_replace( PIIP_PII_Detector::JP_ADDRESS_PATTERN, '$1***', $text );
+		if ( null !== $replaced ) {
+			$text = $replaced;
+		}
+
+		$replaced = preg_replace( PIIP_PII_Detector::JP_POSTAL_LABELED_PATTERN, '$1***-****', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask private key blocks found in text.
+	 *
+	 * The whole block is replaced: partially showing key material has no
+	 * recognition value and every line of it is sensitive.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with private key blocks masked.
+	 */
+	private function mask_private_keys_in_text( $text ) {
+		$replaced = preg_replace( PIIP_PII_Detector::PRIVATE_KEY_PATTERN, '[REDACTED]', $text );
+
+		return null === $replaced ? $text : $replaced;
+	}
+
+	/**
+	 * Mask developer secrets found in text (GitHub, Slack, AWS, Stripe, JWT).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with developer secrets masked.
+	 */
+	private function mask_dev_secrets_in_text( $text ) {
+		foreach ( PIIP_PII_Detector::DEV_SECRET_PATTERNS as $pattern ) {
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) {
+					return $this->mask_token( $m[0] );
+				},
+				$text
+			);
+
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Mask Bearer tokens found in text (including JWTs).
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param string $text Text to process.
+	 * @return string Text with Bearer tokens masked.
+	 */
+	private function mask_bearer_tokens_in_text( $text ) {
+		$replaced = preg_replace_callback(
+			PIIP_PII_Detector::BEARER_PATTERN,
+			function ( $m ) {
+				if ( ! preg_match( '/[0-9\-_+\/=.]/', $m[2] ) ) {
+					return $m[0]; // Plain words like "Bearer authentication".
+				}
+				return $m[1] . $this->mask_token( $m[2] );
+			},
+			$text
+		);
+
+		return null === $replaced ? $text : $replaced;
 	}
 
 	/**
@@ -1073,23 +1413,27 @@ class PIIP_PII_Masker {
 	/**
 	 * Check if a PII type should be masked based on settings.
 	 *
+	 * An explicit mask_{type} setting always wins. When the setting is
+	 * missing (fresh site, pre-upgrade option shape), the type's default
+	 * applies: enabled for everything except the opt-in types listed in
+	 * DEFAULT_OFF_TYPES.
+	 *
 	 * @since 1.0.0
+	 * @since 1.6.0 Made public; missing settings now honor per-type defaults.
 	 *
 	 * @param string|null $pii_type The PII type to check.
 	 * @return bool True if should mask, false otherwise.
 	 */
-	private function should_mask_type( $pii_type ) {
+	public function should_mask_type( $pii_type ) {
 		if ( null === $pii_type ) {
 			return false;
 		}
 
-		// If no settings, mask all types by default.
-		if ( empty( $this->settings ) ) {
-			return true;
+		$setting_key = 'mask_' . $pii_type;
+		if ( isset( $this->settings[ $setting_key ] ) ) {
+			return ! empty( $this->settings[ $setting_key ] );
 		}
 
-		// Check if this specific type is enabled.
-		$setting_key = 'mask_' . $pii_type;
-		return ! isset( $this->settings[ $setting_key ] ) || ! empty( $this->settings[ $setting_key ] );
+		return ! in_array( $pii_type, self::DEFAULT_OFF_TYPES, true );
 	}
 }

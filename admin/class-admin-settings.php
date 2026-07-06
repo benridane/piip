@@ -59,6 +59,12 @@ class PIIP_Admin_Settings {
 				'class'       => 'PIIP_Comments_Integration',
 				'check'       => array( 'PIIP_Comments_Integration', 'is_plugin_active' ),
 			),
+			'users'      => array(
+				'name'        => 'User Profiles',
+				'description' => __( 'Masks PII written into publicly visible profile fields (display name, nickname, biographical info). Account email and website are not touched.', 'piip-pii-protection' ),
+				'class'       => 'PIIP_Users_Integration',
+				'check'       => array( 'PIIP_Users_Integration', 'is_plugin_active' ),
+			),
 			'wpforo'     => array(
 				'name'        => 'wpForo',
 				'description' => __( 'Forum discussions and private messages', 'piip-pii-protection' ),
@@ -76,6 +82,12 @@ class PIIP_Admin_Settings {
 				'description' => __( 'Forum topics and replies', 'piip-pii-protection' ),
 				'class'       => 'PIIP_bbPress_Integration',
 				'check'       => array( 'PIIP_bbPress_Integration', 'is_plugin_active' ),
+			),
+			'cf7'        => array(
+				'name'        => 'Contact Form 7',
+				'description' => __( 'Masks free-text (message) fields in form submissions; dedicated fields such as name and email are kept for replies. Affects both the sent mail and stored copies (e.g. Flamingo).', 'piip-pii-protection' ),
+				'class'       => 'PIIP_CF7_Integration',
+				'check'       => array( 'PIIP_CF7_Integration', 'is_plugin_active' ),
 			),
 		);
 
@@ -154,6 +166,24 @@ class PIIP_Admin_Settings {
 
 			$(document).on('click', '.piip-remove-phrase', function() {
 				$(this).closest('.piip-phrase-row').remove();
+			});
+
+			var patternIndex = $('#piip-custom-patterns .piip-pattern-row').length;
+
+			$('#piip-add-pattern').on('click', function() {
+				var newRow = '<div class=\"piip-pattern-row\" style=\"margin-bottom: 8px; display: flex; align-items: center; gap: 8px;\">' +
+					'<input type=\"checkbox\" name=\"piip_settings[custom_patterns][' + patternIndex + '][enabled]\" value=\"1\" checked>' +
+					'<input type=\"text\" name=\"piip_settings[custom_patterns][' + patternIndex + '][label]\" value=\"\" placeholder=\"" . esc_js( __( 'Name (e.g. Employee ID)', 'piip-pii-protection' ) ) . "\" style=\"width: 160px;\">' +
+					'<input type=\"text\" name=\"piip_settings[custom_patterns][' + patternIndex + '][pattern]\" value=\"\" class=\"code\" placeholder=\"" . esc_js( __( 'Regex, e.g. EMP-\\d{6}', 'piip-pii-protection' ) ) . "\" style=\"flex: 1;\">' +
+					'<input type=\"text\" name=\"piip_settings[custom_patterns][' + patternIndex + '][replacement]\" value=\"\" class=\"code\" placeholder=\"***\" style=\"width: 140px;\">' +
+					'<button type=\"button\" class=\"button piip-remove-pattern\" style=\"color: #a00;\">" . esc_js( __( 'Remove', 'piip-pii-protection' ) ) . "</button>' +
+					'</div>';
+				$('#piip-custom-patterns').append(newRow);
+				patternIndex++;
+			});
+
+			$(document).on('click', '.piip-remove-pattern', function() {
+				$(this).closest('.piip-pattern-row').remove();
 			});
 		});
 		";
@@ -240,12 +270,21 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
+		// Custom patterns section.
+		add_settings_section(
+			'piip_custom_patterns_section',
+			__( 'Custom Patterns', 'piip-pii-protection' ),
+			array( $this, 'custom_patterns_section_callback' ),
+			'piip-settings'
+		);
+
 		// Add fields.
 		$this->add_general_fields();
 		$this->add_wordpress_core_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
 		$this->add_consent_fields();
+		$this->add_custom_pattern_fields();
 	}
 
 	/**
@@ -277,18 +316,22 @@ class PIIP_Admin_Settings {
 	 * @return void
 	 */
 	private function add_wordpress_core_fields() {
-		// Add Comments integration field.
-		if ( isset( $this->available_integrations['comments'] ) ) {
-			$integration = $this->available_integrations['comments'];
+		// Core features live in their own section, not under Plugin Integrations.
+		foreach ( array( 'comments', 'users' ) as $slug ) {
+			if ( ! isset( $this->available_integrations[ $slug ] ) ) {
+				continue;
+			}
+
+			$integration = $this->available_integrations[ $slug ];
 			add_settings_field(
-				'integration_comments',
+				'integration_' . $slug,
 				$integration['name'],
 				array( $this, 'integration_field_callback' ),
 				'piip-settings',
 				'piip_wordpress_core_section',
 				array(
-					'label_for'   => 'integration_comments',
-					'slug'        => 'comments',
+					'label_for'   => 'integration_' . $slug,
+					'slug'        => $slug,
 					'integration' => $integration,
 				)
 			);
@@ -304,8 +347,8 @@ class PIIP_Admin_Settings {
 	 */
 	private function add_integration_fields() {
 		foreach ( $this->available_integrations as $slug => $integration ) {
-			// Skip comments as it's in WordPress Core section.
-			if ( 'comments' === $slug ) {
+			// Skip core features; they are in the WordPress Core section.
+			if ( in_array( $slug, array( 'comments', 'users' ), true ) ) {
 				continue;
 			}
 
@@ -333,14 +376,22 @@ class PIIP_Admin_Settings {
 	 */
 	private function add_pii_type_fields() {
 		$pii_types = array(
-			'email'    => __( 'Email Addresses', 'piip-pii-protection' ),
-			'phone'    => __( 'Phone Numbers', 'piip-pii-protection' ),
-			'address'  => __( 'Addresses', 'piip-pii-protection' ),
-			'card'     => __( 'Credit Card Numbers', 'piip-pii-protection' ),
-			'ssn'      => __( 'Social Security Numbers', 'piip-pii-protection' ),
-			'password' => __( 'Passwords', 'piip-pii-protection' ),
-			'token'    => __( 'AI API Keys/Tokens', 'piip-pii-protection' ),
+			'email'     => __( 'Email Addresses', 'piip-pii-protection' ),
+			'phone'     => __( 'Phone Numbers', 'piip-pii-protection' ),
+			'address'   => __( 'Addresses', 'piip-pii-protection' ),
+			'card'      => __( 'Credit Card Numbers', 'piip-pii-protection' ),
+			'ssn'       => __( 'Social Security Numbers', 'piip-pii-protection' ),
+			'password'  => __( 'Passwords', 'piip-pii-protection' ),
+			'token'     => __( 'API Keys, Tokens & Secrets', 'piip-pii-protection' ),
+			'ip'        => __( 'IP Addresses', 'piip-pii-protection' ),
+			'hosting'   => __( 'Hosting Account IDs', 'piip-pii-protection' ),
+			'dob'       => __( 'Dates of Birth', 'piip-pii-protection' ),
+			'bank'      => __( 'Bank Account Numbers', 'piip-pii-protection' ),
+			'name_text' => __( 'Names (self-introduction phrases)', 'piip-pii-protection' ),
 		);
+
+		// Opt-in types: unchecked when the setting has never been saved.
+		$default_off = array( 'name_text' );
 
 		foreach ( $pii_types as $type => $label ) {
 			add_settings_field(
@@ -351,6 +402,7 @@ class PIIP_Admin_Settings {
 				'piip_pii_types_section',
 				array(
 					'label_for' => 'mask_' . $type,
+					'default'   => in_array( $type, $default_off, true ) ? 0 : 1,
 				)
 			);
 		}
@@ -379,6 +431,26 @@ class PIIP_Admin_Settings {
 			'piip_consent_section',
 			array(
 				'label_for' => 'consent_phrases',
+			)
+		);
+	}
+
+	/**
+	 * Add custom pattern fields.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return void
+	 */
+	private function add_custom_pattern_fields() {
+		add_settings_field(
+			'custom_patterns',
+			__( 'Patterns', 'piip-pii-protection' ),
+			array( $this, 'custom_patterns_field_callback' ),
+			'piip-settings',
+			'piip_custom_patterns_section',
+			array(
+				'label_for' => 'custom_patterns',
 			)
 		);
 	}
@@ -446,6 +518,17 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Custom patterns section callback.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return void
+	 */
+	public function custom_patterns_section_callback() {
+		echo '<p>' . esc_html__( 'Mask site-specific identifiers (e.g. employee or member IDs) with your own regular expressions. Each match is replaced with the replacement text.', 'piip-pii-protection' ) . '</p>';
+	}
+
+	/**
 	 * Integration field callback.
 	 *
 	 * @since 1.0.0
@@ -476,7 +559,7 @@ class PIIP_Admin_Settings {
 		// Show status.
 		if ( $is_plugin_active ) {
 			// Different status text for core features vs plugins.
-			if ( 'comments' === $slug ) {
+			if ( in_array( $slug, array( 'comments', 'users' ), true ) ) {
 				printf(
 					'<span class="piip-status piip-status-active" style="color: green; margin-left: 10px;">%s</span>',
 					esc_html__( 'Available', 'piip-pii-protection' )
@@ -511,10 +594,10 @@ class PIIP_Admin_Settings {
 	 */
 	public function checkbox_field_callback( $args ) {
 		$options = get_option( 'piip_settings', array() );
-		$checked = isset( $options[ $args['label_for'] ] ) ? checked( $options[ $args['label_for'] ], 1, false ) : '';
+		$default = isset( $args['default'] ) ? (int) $args['default'] : 1;
 
 		if ( ! isset( $options[ $args['label_for'] ] ) ) {
-			$checked_attr = 'checked="checked"'; // Default to enabled.
+			$checked_attr = $default ? 'checked="checked"' : '';
 		} else {
 			$checked_attr = $options[ $args['label_for'] ] ? 'checked="checked"' : '';
 		}
@@ -640,6 +723,58 @@ class PIIP_Admin_Settings {
 	}
 
 	/**
+	 * Custom patterns field callback.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param array $args Field arguments.
+	 * @return void
+	 *
+	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+	 */
+	public function custom_patterns_field_callback( $args ) {
+		unset( $args ); // Explicitly unset unused parameter.
+		$options  = get_option( 'piip_settings', array() );
+		$patterns = isset( $options['custom_patterns'] ) && is_array( $options['custom_patterns'] ) ? $options['custom_patterns'] : array();
+
+		echo '<div id="piip-custom-patterns">';
+
+		foreach ( $patterns as $index => $pattern_data ) {
+			$label       = isset( $pattern_data['label'] ) ? $pattern_data['label'] : '';
+			$pattern     = isset( $pattern_data['pattern'] ) ? $pattern_data['pattern'] : '';
+			$replacement = isset( $pattern_data['replacement'] ) ? $pattern_data['replacement'] : '';
+			$enabled     = ! empty( $pattern_data['enabled'] );
+
+			printf(
+				'<div class="piip-pattern-row" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+					<input type="checkbox" name="piip_settings[custom_patterns][%1$d][enabled]" value="1" %2$s>
+					<input type="text" name="piip_settings[custom_patterns][%1$d][label]" value="%3$s" placeholder="%6$s" style="width: 160px;">
+					<input type="text" name="piip_settings[custom_patterns][%1$d][pattern]" value="%4$s" class="code" placeholder="%7$s" style="flex: 1;">
+					<input type="text" name="piip_settings[custom_patterns][%1$d][replacement]" value="%5$s" class="code" placeholder="***" style="width: 140px;">
+					<button type="button" class="button piip-remove-pattern" style="color: #a00;">%8$s</button>
+				</div>',
+				absint( $index ),
+				checked( $enabled, true, false ),
+				esc_attr( $label ),
+				esc_attr( $pattern ),
+				esc_attr( $replacement ),
+				esc_attr__( 'Name (e.g. Employee ID)', 'piip-pii-protection' ),
+				esc_attr__( 'Regex, e.g. EMP-\d{6}', 'piip-pii-protection' ),
+				esc_html__( 'Remove', 'piip-pii-protection' )
+			);
+		}
+
+		echo '</div>';
+
+		printf(
+			'<button type="button" id="piip-add-pattern" class="button" style="margin-top: 8px;">%s</button>',
+			esc_html__( '+ Add Pattern', 'piip-pii-protection' )
+		);
+
+		echo '<p class="description">' . esc_html__( 'Regular expression without delimiters, applied case-sensitively to text content (PCRE, Unicode mode). Invalid expressions are rejected on save. The replacement is inserted literally.', 'piip-pii-protection' ) . '</p>';
+	}
+
+	/**
 	 * Sanitize settings.
 	 *
 	 * @since 1.0.0
@@ -660,6 +795,11 @@ class PIIP_Admin_Settings {
 			'mask_ssn',
 			'mask_password',
 			'mask_token',
+			'mask_ip',
+			'mask_hosting',
+			'mask_dob',
+			'mask_bank',
+			'mask_name_text',
 		);
 
 		// Add integration checkboxes.
@@ -670,6 +810,9 @@ class PIIP_Admin_Settings {
 		foreach ( $checkboxes as $checkbox ) {
 			$sanitized[ $checkbox ] = isset( $input[ $checkbox ] ) ? 1 : 0;
 		}
+
+		// Saving replaces the whole option; keep the schema version.
+		$sanitized['settings_version'] = PIIP_SETTINGS_VERSION;
 
 		// Sanitize consent phrases.
 		if ( isset( $input['consent_phrases'] ) && is_array( $input['consent_phrases'] ) ) {
@@ -684,6 +827,49 @@ class PIIP_Admin_Settings {
 			}
 			// Re-index array.
 			$sanitized['consent_phrases'] = array_values( $sanitized['consent_phrases'] );
+		}
+
+		// Sanitize custom patterns.
+		if ( isset( $input['custom_patterns'] ) && is_array( $input['custom_patterns'] ) ) {
+			$sanitized['custom_patterns'] = array();
+			foreach ( $input['custom_patterns'] as $pattern_data ) {
+				$pattern = isset( $pattern_data['pattern'] ) ? trim( (string) $pattern_data['pattern'] ) : '';
+
+				if ( '' === $pattern ) {
+					continue;
+				}
+
+				if ( strlen( $pattern ) > 500 ) {
+					add_settings_error(
+						'piip_settings',
+						'piip_custom_pattern_too_long',
+						__( 'A custom pattern was discarded: patterns are limited to 500 characters.', 'piip-pii-protection' )
+					);
+					continue;
+				}
+
+				$regex = '/' . str_replace( '/', '\/', $pattern ) . '/u';
+				if ( false === @preg_match( $regex, '' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Probing regex validity.
+					add_settings_error(
+						'piip_settings',
+						'piip_custom_pattern_invalid',
+						sprintf(
+							/* translators: %s: the rejected regular expression. */
+							__( 'A custom pattern was discarded because it is not a valid regular expression: %s', 'piip-pii-protection' ),
+							$pattern
+						)
+					);
+					continue;
+				}
+
+				$sanitized['custom_patterns'][] = array(
+					'label'       => isset( $pattern_data['label'] ) ? sanitize_text_field( $pattern_data['label'] ) : '',
+					'pattern'     => $pattern,
+					'replacement' => isset( $pattern_data['replacement'] ) ? sanitize_text_field( $pattern_data['replacement'] ) : '',
+					'enabled'     => ! empty( $pattern_data['enabled'] ) ? 1 : 0,
+				);
+			}
+			$sanitized['custom_patterns'] = array_values( $sanitized['custom_patterns'] );
 		}
 
 		return $sanitized;

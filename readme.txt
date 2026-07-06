@@ -2,17 +2,17 @@
 Contributors: benridane, presents111
 Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 8.2
-Stable tag: 1.4.1
+Stable tag: 1.6.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically detects and masks PII in WordPress comments and forms to protect user privacy and ensure GDPR compliance.
+Automatically detects and masks PII in WordPress comments and forms to protect user privacy and support your GDPR compliance efforts.
 
 == Description ==
 
-PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in WordPress comments and community plugin content before the data is saved to your database. This helps protect user privacy and ensures GDPR compliance.
+PIIP (PII Protection) is a plugin that automatically detects and masks personally identifiable information (PII) in WordPress comments and community plugin content before the data is saved to your database. This helps protect user privacy and supports your compliance efforts under privacy regulations such as the GDPR. Note that PIIP is a technical tool and does not by itself make your site GDPR compliant.
 
 = Key Features =
 
@@ -23,17 +23,25 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
 * **Consent Opt-Out**: Users can include consent phrases to skip masking when sharing personal info publicly
 * **Presidio-Level Detection**: High-accuracy detection with validation (Luhn for credit cards, check digits for My Number)
+* **Retroactive Scan**: Scan content that existed before installing PIIP and apply masking after a dry-run review
+* **Custom Patterns**: Mask site-specific identifiers (employee IDs, member numbers) with your own regular expressions
+* **WP-CLI Support**: `wp piip mask` and `wp piip scan` commands for automation and large sites
 
 = Supported PII Types =
 
 * Email addresses (example@domain.com → e***@domain.com)
 * Phone numbers (Japanese mobile/landline, international formats)
-* Addresses (masked to ***)
+* Japanese street addresses in free text (東京都新宿区西新宿2-8-1 → 東京都***) and labeled postal codes (〒123-4567 → 〒***-****)
 * Credit card numbers with Luhn validation (4532-1234-5678-9010 → ****-****-****-9010)
 * Social Security Numbers / Japanese My Number with check digit validation
-* Passwords (masked to [REDACTED])
+* Passwords, including labeled values in free text (password: xxx / パスワードは xxx → [REDACTED])
+* HTTP credentials: Basic auth (curl -u, Authorization: Basic, user:pass@host URLs) and Bearer tokens (including JWTs)
+* Developer secrets: GitHub, Slack, AWS, Stripe tokens and SSH/PEM private key blocks
 * API Tokens/Keys (partial masking showing first and last 4 characters)
 * AI API Keys (OpenAI sk-***, Anthropic sk-ant-***, Google AIza***, Hugging Face hf_***, Replicate r8_***, Cohere, Azure OpenAI)
+* Labeled dates of birth (生年月日: 1990-01-15 → ****-**-**)
+* Labeled bank account numbers (口座番号: 1234567 → ***4567)
+* Names in self-introduction phrases (山田太郎と申します → 山***と申します; opt-in, off by default)
 * IP Addresses (192.168.1.1 → 192.***.***1)
 * Hosting Account IDs (XServer, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
 
@@ -41,6 +49,9 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 
 * **WordPress Core**
   * Comments
+  * User Profiles (display name, nickname, biographical info)
+* **Form Plugins**
+  * Contact Form 7 (free-text fields; protects sent mail and stored copies such as Flamingo)
 * **Community Plugins**
   * wpForo Forum
   * BuddyPress
@@ -119,12 +130,16 @@ No. All masking happens on the server (PHP), so it cannot be bypassed by disabli
 No. The original data is never stored. We only store:
 - The masked value
 
-= Is this GDPR compliant? =
+= Does this make my site GDPR compliant? =
 
-Yes. PIIP helps with GDPR compliance by:
-- Minimizing data collection (masking PII)
+No plugin can make a site GDPR compliant by itself. Compliance depends on how your site collects, processes, and stores personal data as a whole, and may require legal advice.
+
+PIIP supports your compliance efforts by:
+- Minimizing stored personal data (masking PII before it is saved)
 - No third-party data sharing (everything stays on your server)
 - No detailed logging to protect user privacy
+
+Also note that detection is pattern-based and may not catch every piece of personal information, so do not rely on it as your only safeguard.
 
 == Screenshots ==
 
@@ -133,6 +148,27 @@ Yes. PIIP helps with GDPR compliance by:
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.6.0 - 2026-07-05 =
+* **New**: Japanese street addresses are now detected and masked in free text (prefecture + municipality + block number required, so mere place mentions are untouched); labeled postal codes (〒 / 郵便番号) are masked too
+* **New**: Labeled passwords in free text (password: xxx / パスワードは xxx) are masked to [REDACTED]
+* **New**: HTTP Basic auth credentials are masked - curl -u user:pass, Authorization: Basic headers, and user:pass@host URLs (password only)
+* **New**: Bearer tokens (including JWTs) are masked
+* **New**: Developer secrets are masked - GitHub, Slack, AWS, Stripe tokens, bare JWTs, and whole SSH/PEM private key blocks
+* **New**: Labeled dates of birth (生年月日/誕生日/birth date) and labeled bank account numbers (口座番号, 普通/当座) are masked; both can be disabled in settings
+* **New**: Opt-in masking of names in self-introduction phrases (〜と申します, 名前: 〜); off by default, enable "Names (self-introduction phrases)" in settings
+* **Changed**: Tokens shorter than 32 characters are now partially masked instead of passing through unmasked
+* **Changed**: IP address and hosting ID masking can now be toggled in settings (previously always on); the internal mask_hosting_id setting key was migrated to mask_hosting
+* **Fixed**: The masking preview now uses the exact same per-type enablement rules as real submissions
+
+= 1.5.0 - 2026-07-05 =
+* **New**: PII Scan tool (Tools → PII Scan) - scan existing comments and posts for PII with a dry-run report, then apply masking retroactively
+* **New**: Contact Form 7 integration - masks free-text (message) fields in submissions, protecting both the sent mail and stored copies (e.g. Flamingo); name/email fields are kept for replies
+* **New**: User Profiles integration - masks PII written into publicly visible profile fields (display name, nickname, biographical info)
+* **New**: Custom patterns - define your own regex patterns and replacements in the settings for site-specific identifiers (employee IDs, member numbers, etc.)
+* **New**: WP-CLI commands - `wp piip mask` and `wp piip scan --apply` for large sites and CI
+* **Fixed**: Enabled integrations (e.g. Comments) were inactive until the settings were saved once, due to a settings key mismatch in the activation defaults
+* **Fixed**: Ordinary words were reported as GCP hosting IDs in the preview/scan detection breakdown, flagging almost every text as containing PII
 
 = 1.4.1 - 2026-07-02 =
 * **New**: Masking Preview tool on the settings page - type sample text and see the masked result in real time
