@@ -645,8 +645,6 @@ class PIIP_Hook_Tester {
             'bank_passbook'    => array( 'in' => '三菱UFJ銀行 普通 7654321', 'not' => array( ' 7654321' ), 'has' => array( '***4321' ) ),
             'order_number'     => array( 'in' => '注文番号:12345678', 'same' => true ),
             'bank_too_long'    => array( 'in' => '口座番号:123456789', 'same' => true ),
-            // --- name_text default OFF ---
-            'name_default_off' => array( 'in' => '私は山田太郎と申します', 'same' => true ),
             // --- Regression: 1.5.0 behavior ---
             'regression_mixed' => array( 'in' => 'Contact test@example.com or call 090-1234-5678, card 4532-7295-8010-4414, IP 192.168.1.100', 'not' => array( 'test@example.com', '090-1234-5678', '4532-7295-8010-4414', '192.168.1.100' ) ),
         );
@@ -693,18 +691,29 @@ class PIIP_Hook_Tester {
         $twice = piip_mask_text( $once );
         $this->log_test( 'text_idempotency', $once === $twice ? 'PASS' : 'FAIL', $once === $twice ? 'ok' : $once . ' != ' . $twice );
 
-        // name_text masks when explicitly enabled (fresh masker; the
-        // plugin instance cached its settings at init).
-        $saved                     = get_option( 'piip_settings', array() );
-        $enabled                   = is_array( $saved ) ? $saved : array();
-        $enabled['mask_name_text'] = 1;
-        update_option( 'piip_settings', $enabled );
+        // name_text behavior is tested against forced settings (fresh
+        // maskers; the plugin instance cached its settings at init) so
+        // the results do not depend on what the site admin has saved.
+        $saved   = get_option( 'piip_settings', array() );
+        $base    = is_array( $saved ) ? $saved : array();
+
+        // Missing key must default to OFF.
+        unset( $base['mask_name_text'] );
+        update_option( 'piip_settings', $base );
+        $masker   = new PIIP_PII_Masker();
+        $untouched = $masker->mask_text_simple( '私は山田太郎と申します' );
+
+        // Explicitly enabled must mask, but not company names.
+        $base['mask_name_text'] = 1;
+        update_option( 'piip_settings', $base );
         $masker   = new PIIP_PII_Masker();
         $intro    = $masker->mask_text_simple( '私は山田太郎と申します' );
         $company  = $masker->mask_text_simple( '株式会社テスト商事と申します' );
         update_option( 'piip_settings', $saved );
 
+        $off_ok  = '私は山田太郎と申します' === $untouched;
         $name_ok = false === strpos( $intro, '山田太郎' );
+        $this->log_test( 'text_name_default_off', $off_ok ? 'PASS' : 'FAIL', $off_ok ? 'ok' : 'changed to: ' . $untouched );
         $this->log_test( 'text_name_enabled', $name_ok ? 'PASS' : 'FAIL', $intro );
         $this->log_test( 'text_name_company', '株式会社テスト商事と申します' === $company ? 'PASS' : 'FAIL', $company );
     }
