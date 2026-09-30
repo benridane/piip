@@ -145,67 +145,38 @@ abstract class PIIP_Base_Integration {
 	 * Check if content contains an enabled consent phrase.
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 Delegates to PIIP_PII_Masker so submissions, the preview
+	 *              and the scanner share one consent rule.
 	 *
 	 * @param string $content Content to check.
 	 * @return bool True if consent phrase found.
 	 */
 	protected function has_consent_phrase( $content ) {
-		$phrases = $this->get_enabled_consent_phrases();
-
-		if ( empty( $phrases ) ) {
-			return false;
-		}
-
-		foreach ( $phrases as $phrase ) {
-			if ( false !== mb_stripos( $content, $phrase ) ) {
-				return true;
-			}
-		}
-
-		return false;
+		return $this->masker->has_consent_phrase( $content );
 	}
 
 	/**
 	 * Get enabled consent phrases from settings.
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 Delegates to PIIP_PII_Masker::get_enabled_consent_phrases().
 	 *
 	 * @return array Array of enabled phrase strings.
 	 */
 	protected function get_enabled_consent_phrases() {
-		$settings = get_option( 'piip_settings', array() );
-		$phrases  = isset( $settings['consent_phrases'] ) ? $settings['consent_phrases'] : array();
-
-		if ( empty( $phrases ) ) {
-			// Return default phrases if none configured.
-			return $this->get_default_consent_phrases();
-		}
-
-		// Filter to only enabled phrases.
-		$enabled = array();
-		foreach ( $phrases as $phrase_data ) {
-			if ( ! empty( $phrase_data['enabled'] ) && ! empty( $phrase_data['phrase'] ) ) {
-				$enabled[] = $phrase_data['phrase'];
-			}
-		}
-
-		return $enabled;
+		return $this->masker->get_enabled_consent_phrases();
 	}
 
 	/**
 	 * Get default consent phrases.
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 Returns PIIP_PII_Masker::DEFAULT_CONSENT_PHRASES.
 	 *
 	 * @return array Default phrases.
 	 */
 	protected function get_default_consent_phrases() {
-		return array(
-			'マスクを外すことに同意',
-			'個人情報の公開に同意します',
-			'I consent to unmasking',
-			'I consent to sharing my personal information',
-		);
+		return PIIP_PII_Masker::DEFAULT_CONSENT_PHRASES;
 	}
 
 	/**

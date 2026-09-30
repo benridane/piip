@@ -3,7 +3,7 @@
  * Plugin Name:       PIIP - PII Protection
  * Plugin URI:        https://benridane.com/piip
  * Description:       Automatically masks personally identifiable information (PII) in community plugins to protect user privacy.
- * Version:           1.6.0
+ * Version:           1.7.0
  * Requires at least: 6.9
  * Requires PHP:      8.2
  * Author:            Benridane
@@ -21,8 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-define( 'PIIP_VERSION', '1.6.0' );
-define( 'PIIP_SETTINGS_VERSION', 2 );
+define( 'PIIP_VERSION', '1.7.0' );
+define( 'PIIP_SETTINGS_VERSION', 4 );
 define( 'PIIP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PIIP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'PIIP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -109,8 +109,11 @@ class PIIP_Plugin {
 	private function load_dependencies() {
 		// Load core classes.
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-detector.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-patterns.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-pii-masker.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-content-scanner.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-comment-ip-anonymizer.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-abilities.php';
 
 		// Load admin classes.
 		if ( is_admin() ) {
@@ -147,6 +150,10 @@ class PIIP_Plugin {
 		register_deactivation_hook( __FILE__, array( $this, 'deactivate' ) );
 
 		add_action( 'init', array( $this, 'init' ) );
+
+		// The Abilities API registry initializes lazily after init, so the
+		// registration hooks must be in place before then.
+		new PIIP_Abilities();
 	}
 
 	/**
@@ -173,6 +180,30 @@ class PIIP_Plugin {
 
 		// Initialize community plugin integrations.
 		$this->init_integrations();
+
+		$this->init_comment_ip_anonymizer();
+	}
+
+	/**
+	 * Start commenter IP anonymization when enabled.
+	 *
+	 * Independent of the Comments integration toggle, which only covers
+	 * comment text; still off while masking is globally disabled.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @return void
+	 */
+	private function init_comment_ip_anonymizer() {
+		$settings = get_option( 'piip_settings', array() );
+
+		if ( empty( $settings['enable_masking'] ) ) {
+			return;
+		}
+
+		if ( PIIP_Comment_IP_Anonymizer::MODE_ANONYMIZE === PIIP_Comment_IP_Anonymizer::get_mode( $settings ) ) {
+			new PIIP_Comment_IP_Anonymizer();
+		}
 	}
 
 	/**
@@ -186,6 +217,7 @@ class PIIP_Plugin {
 	 *
 	 * @since 1.5.0
 	 * @since 1.6.0 Added the versioned settings upgrade.
+	 * @since 1.7.0 Seeds the comment type and commenter IP settings.
 	 *
 	 * @return void
 	 */
@@ -235,8 +267,40 @@ class PIIP_Plugin {
 				}
 			}
 
+			$settings['settings_version'] = 2;
+			$version                      = 2;
+			$changed                      = true;
+		}
+
+		if ( $version < 3 ) {
+			// New in 1.7.0. Comment masking previously covered every type
+			// submitted through wp_new_comment(); keep that, and leave notes
+			// (only reachable via REST, so never masked before) off.
+			foreach ( PIIP_Comments_Integration::COMMENT_TYPE_GROUPS as $group => $default ) {
+				if ( ! isset( $settings[ 'comment_type_' . $group ] ) ) {
+					$settings[ 'comment_type_' . $group ] = $default;
+				}
+			}
+
+			if ( ! isset( $settings['comment_ip'] ) ) {
+				$settings['comment_ip'] = PIIP_Comment_IP_Anonymizer::MODE_KEEP;
+			}
+
+			$settings['settings_version'] = 3;
+			$version                      = 3;
+			$changed                      = true;
+		}
+
+		if ( $version < 4 ) {
+			// New in 1.7.0: labeled contact details and ID document numbers.
+			foreach ( array( 'mask_contact', 'mask_id_doc' ) as $key ) {
+				if ( ! isset( $settings[ $key ] ) ) {
+					$settings[ $key ] = 1;
+				}
+			}
+
 			$settings['settings_version'] = PIIP_SETTINGS_VERSION;
-			$changed = true;
+			$changed                      = true;
 		}
 
 		if ( $changed ) {
@@ -363,19 +427,28 @@ class PIIP_Plugin {
 			'mask_dob'               => 1,
 			'mask_bank'              => 1,
 			'mask_name_text'         => 0,
+			'mask_contact'           => 1,
+			'mask_id_doc'            => 1,
 			'integration_comments'   => 1,
 			'integration_wpforo'     => 0,
 			'integration_buddypress' => 0,
 			'integration_bbpress'    => 0,
 			'integration_cf7'        => 0,
 			'integration_users'      => 0,
-			'consent_phrases'        => array(
-				array(
-					'phrase'  => 'I consent to share my personal information',
-					'enabled' => 1,
-				),
-			),
+			'comment_ip'             => PIIP_Comment_IP_Anonymizer::MODE_KEEP,
+			'consent_phrases'        => array(),
 		);
+
+		foreach ( PIIP_Comments_Integration::COMMENT_TYPE_GROUPS as $group => $default ) {
+			$default_settings[ 'comment_type_' . $group ] = $default;
+		}
+
+		foreach ( PIIP_PII_Masker::DEFAULT_CONSENT_PHRASES as $phrase ) {
+			$default_settings['consent_phrases'][] = array(
+				'phrase'  => $phrase,
+				'enabled' => 1,
+			);
+		}
 
 		add_option( 'piip_settings', $default_settings );
 

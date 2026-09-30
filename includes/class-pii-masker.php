@@ -32,6 +32,22 @@ class PIIP_PII_Masker {
 	private const DEFAULT_OFF_TYPES = array( 'name_text' );
 
 	/**
+	 * Consent phrases used while the consent setting has never been saved.
+	 *
+	 * Single source for the runtime check, the settings screen and the
+	 * activation defaults, so they cannot drift apart.
+	 *
+	 * @since 1.7.0
+	 * @var array
+	 */
+	public const DEFAULT_CONSENT_PHRASES = array(
+		'マスクを外すことに同意',
+		'個人情報の公開に同意します',
+		'I consent to unmasking',
+		'I consent to sharing my personal information',
+	);
+
+	/**
 	 * PII Detector instance.
 	 *
 	 * @since 1.0.0
@@ -374,6 +390,9 @@ class PIIP_PII_Masker {
 			case 'hosting':
 				return $this->mask_hosting_id( $value );
 
+			case 'ip':
+				return $this->mask_ip( $value );
+
 			default:
 				return $value;
 		}
@@ -384,31 +403,52 @@ class PIIP_PII_Masker {
 	 *
 	 * @since 1.2.2
 	 * @since 1.4.1 Made public for the masking preview feature.
+	 * @since 1.7.0 Falls back to the default phrases while the setting has
+	 *              never been saved, and matches case-insensitively in
+	 *              multibyte text.
 	 *
 	 * @param string $value The value to check.
 	 * @return bool True if consent phrase found, false otherwise.
 	 */
 	public function has_consent_phrase( $value ) {
-		$consent_phrases = $this->settings['consent_phrases'] ?? array();
-		
-		if ( empty( $consent_phrases ) || ! is_array( $consent_phrases ) ) {
-			return false;
-		}
+		$value = (string) $value;
 
-		$value_lower = strtolower( $value );
-
-		foreach ( $consent_phrases as $phrase_config ) {
-			if ( empty( $phrase_config['enabled'] ) || empty( $phrase_config['phrase'] ) ) {
-				continue;
-			}
-
-			$phrase_lower = strtolower( $phrase_config['phrase'] );
-			if ( false !== strpos( $value_lower, $phrase_lower ) ) {
+		foreach ( $this->get_enabled_consent_phrases() as $phrase ) {
+			if ( false !== mb_stripos( $value, $phrase ) ) {
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * Get the consent phrases that currently bypass masking.
+	 *
+	 * An unsaved setting means the defaults apply; a saved empty list means
+	 * no phrase bypasses masking.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @return array Enabled phrase strings.
+	 */
+	public function get_enabled_consent_phrases() {
+		if ( ! isset( $this->settings['consent_phrases'] ) ) {
+			return self::DEFAULT_CONSENT_PHRASES;
+		}
+
+		if ( ! is_array( $this->settings['consent_phrases'] ) ) {
+			return array();
+		}
+
+		$enabled = array();
+		foreach ( $this->settings['consent_phrases'] as $phrase_config ) {
+			if ( ! empty( $phrase_config['enabled'] ) && ! empty( $phrase_config['phrase'] ) ) {
+				$enabled[] = (string) $phrase_config['phrase'];
+			}
+		}
+
+		return $enabled;
 	}
 
 	/**
@@ -720,6 +760,8 @@ class PIIP_PII_Masker {
 	 * Presidio-level detection with validation.
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 Falls back to per-segment masking when masking would
+	 *              change the HTML markup.
 	 *
 	 * @param string $text Text content to scan and mask.
 	 * @return string Text with PII masked.
@@ -729,91 +771,305 @@ class PIIP_PII_Masker {
 			return $text;
 		}
 
-		// Mask private key blocks first: their base64 body would otherwise
-		// be shredded into fragments by the 32-hex/token patterns.
-		if ( $this->should_mask_type( 'token' ) ) {
-			$text = $this->mask_private_keys_in_text( $text );
+		$masked = $this->mask_plain_text( $text );
+
+		// Masking can run after HTML sanitization (BuddyPress activity and
+		// profile fields, user profiles, comment edits). A match that spans
+		// markup would otherwise be able to rewrite tags or attributes, so
+		// any change to the markup falls back to masking text and attribute
+		// values one by one, which cannot alter the structure.
+		if ( $masked !== $text && false !== strpos( $text, '<' )
+			&& self::get_markup_signature( $text ) !== self::get_markup_signature( $masked ) ) {
+			return $this->mask_html_segments( $text );
 		}
 
-		// Mask labeled passwords ("password: xxx") before generic token
-		// patterns can consume parts of the value.
-		if ( $this->should_mask_type( 'password' ) ) {
-			$text = $this->mask_labeled_passwords_in_text( $text );
+		return $masked;
+	}
+
+	/**
+	 * Mask HTML piece by piece: text runs and attribute values separately.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $html HTML fragment.
+	 * @return string Masked HTML with the original markup structure.
+	 */
+	private function mask_html_segments( $html ) {
+		$output = '';
+
+		foreach ( wp_html_split( $html ) as $segment ) {
+			if ( '' === $segment ) {
+				continue;
+			}
+
+			// Text between tags.
+			if ( '<' !== $segment[0] ) {
+				$output .= $this->mask_plain_text( $segment );
+				continue;
+			}
+
+			// Comments (including block delimiters) and CDATA stay as they are.
+			if ( 0 === strpos( $segment, '<!' ) ) {
+				$output .= $segment;
+				continue;
+			}
+
+			$processor = new WP_HTML_Tag_Processor( $segment );
+			if ( ! $processor->next_tag( array( 'tag_closers' => 'visit' ) ) ) {
+				// Not a parsable tag: treat it as text, escaped so it stays text.
+				$output .= esc_html( $this->mask_plain_text( $segment ) );
+				continue;
+			}
+
+			foreach ( (array) $processor->get_attribute_names_with_prefix( '' ) as $name ) {
+				$value = $processor->get_attribute( $name );
+				if ( ! is_string( $value ) || '' === $value ) {
+					continue;
+				}
+
+				$masked_value = $this->mask_plain_text( $value );
+				if ( $masked_value !== $value ) {
+					// set_attribute() encodes the value for its context.
+					$processor->set_attribute( $name, $masked_value );
+				}
+			}
+
+			$output .= $processor->get_updated_html();
 		}
 
-		// Mask Basic auth credentials. Must run before the email masker,
-		// which would otherwise rewrite user:pass@host userinfo as an
-		// email address and leak the password's first character.
-		if ( $this->should_mask_type( 'token' ) ) {
-			$text = $this->mask_basic_auth_in_text( $text );
-			$text = $this->mask_bearer_tokens_in_text( $text );
+		return $output;
+	}
+
+	/**
+	 * Describe the markup of an HTML fragment: tags, closers, attribute names.
+	 *
+	 * Two fragments with the same signature have the same elements and
+	 * attributes, only different attribute values and text.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $html HTML fragment.
+	 * @return string Signature.
+	 */
+	private static function get_markup_signature( $html ) {
+		$processor = new WP_HTML_Tag_Processor( $html );
+		$parts     = array();
+
+		while ( $processor->next_tag( array( 'tag_closers' => 'visit' ) ) ) {
+			// Line breaks inside a redacted block (e.g. a PEM key pasted into
+			// a paragraph) may disappear with it; that cannot alter markup.
+			if ( 'BR' === $processor->get_tag() ) {
+				continue;
+			}
+
+			$names = (array) $processor->get_attribute_names_with_prefix( '' );
+			sort( $names );
+			$parts[] = ( $processor->is_tag_closer() ? '/' : '' ) . $processor->get_tag() . '[' . implode( ',', $names ) . ']';
 		}
 
-		// Mask labeled dates of birth before generic numeric maskers.
-		if ( $this->should_mask_type( 'dob' ) ) {
-			$text = $this->mask_dob_in_text( $text );
+		if ( $processor->paused_at_incomplete_token() ) {
+			$parts[] = '#incomplete';
 		}
 
-		// Mask labeled bank account numbers. Must run before the phone
-		// masker: 0-leading account numbers match the jp_landline pattern.
-		if ( $this->should_mask_type( 'bank' ) ) {
-			$text = $this->mask_bank_in_text( $text );
+		return implode( ' ', $parts );
+	}
+
+	/**
+	 * Mask plain text (no HTML awareness), full-width aware.
+	 *
+	 * Rules run on normalized text (full-width alphanumerics folded to
+	 * ASCII); characters that masking left alone are then taken from the
+	 * original, so full-width text stays full-width. Site-defined custom
+	 * patterns run last, on the original characters.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $text Text content to scan and mask.
+	 * @return string Text with PII masked.
+	 */
+	private function mask_plain_text( $text ) {
+		if ( ! is_string( $text ) || '' === $text ) {
+			return $text;
 		}
 
-		// Mask Japanese addresses and labeled postal codes. Must run before
-		// the phone masker: 0-leading postal codes like 〒060-0001 match the
-		// jp_landline pattern, which would leak the last four digits.
-		if ( $this->should_mask_type( 'address' ) ) {
-			$text = $this->mask_addresses_in_text( $text );
+		$normalized = PIIP_PII_Patterns::normalize( $text );
+		$masked     = $this->apply_text_rules( $normalized );
+
+		if ( $normalized !== $text ) {
+			$masked = $masked === $normalized
+				? $text
+				: PIIP_PII_Patterns::restore_original_chars( $text, $normalized, $masked );
 		}
 
-		// Mask emails (high confidence).
-		if ( $this->should_mask_type( 'email' ) ) {
-			$text = $this->mask_emails_in_text( $text );
-		}
+		return $this->mask_custom_patterns_in_text( $masked );
+	}
 
-		// Mask credit cards (with Luhn validation).
-		if ( $this->should_mask_type( 'card' ) ) {
-			$text = $this->mask_credit_cards_in_text( $text );
-		}
+	/**
+	 * Apply every enabled text rule, in order.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $text Normalized text.
+	 * @return string Masked text.
+	 */
+	private function apply_text_rules( $text ) {
+		foreach ( PIIP_PII_Patterns::get_text_rules() as $rule ) {
+			if ( ! $this->should_mask_type( $rule['type'] ) ) {
+				continue;
+			}
 
-		// Mask SSNs and My Number.
-		if ( $this->should_mask_type( 'ssn' ) ) {
-			$text = $this->mask_ssns_in_text( $text );
-			$text = $this->mask_mynumber_in_text( $text );
-		}
+			$replaced = preg_replace_callback(
+				$rule['regex'],
+				function ( $m ) use ( $rule ) {
+					return $this->mask_rule_match( $rule, $m );
+				},
+				$text,
+				-1,
+				$count,
+				PREG_OFFSET_CAPTURE
+			);
 
-		// Mask phone numbers (Japanese and international).
-		if ( $this->should_mask_type( 'phone' ) ) {
-			$text = $this->mask_phones_in_text( $text );
+			if ( null !== $replaced ) {
+				$text = $replaced;
+			}
 		}
-
-		// Mask IP addresses.
-		if ( $this->should_mask_type( 'ip' ) ) {
-			$text = $this->mask_ip_addresses_in_text( $text );
-		}
-
-		// Mask hosting account/server IDs.
-		if ( $this->should_mask_type( 'hosting' ) ) {
-			$text = $this->mask_hosting_ids_in_text( $text );
-		}
-
-		// Mask AI API keys and tokens. Developer secrets run first so the
-		// generic/32-hex AI patterns cannot pre-chew their substrings.
-		if ( $this->should_mask_type( 'token' ) ) {
-			$text = $this->mask_dev_secrets_in_text( $text );
-			$text = $this->mask_ai_keys_in_text( $text );
-		}
-
-		// Mask name self-introductions (opt-in, off by default).
-		if ( $this->should_mask_type( 'name_text' ) ) {
-			$text = $this->mask_names_in_text( $text );
-		}
-
-		// Mask site-defined custom patterns.
-		$text = $this->mask_custom_patterns_in_text( $text );
 
 		return $text;
+	}
+
+	/**
+	 * Build the replacement for one rule match: only the value group changes.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param array $rule Rule.
+	 * @param array $m    Match with offsets (PREG_OFFSET_CAPTURE).
+	 * @return string Replacement for the whole match.
+	 */
+	private function mask_rule_match( array $rule, array $m ) {
+		$whole = $m[0][0];
+		$group = isset( $rule['group'] ) ? (int) $rule['group'] : 0;
+
+		if ( ! isset( $m[ $group ] ) || -1 === $m[ $group ][1] || '' === $m[ $group ][0] ) {
+			return $whole;
+		}
+
+		$value = $m[ $group ][0];
+		if ( ! PIIP_PII_Patterns::validate( $rule, $value, $this->detector ) ) {
+			return $whole;
+		}
+
+		if ( isset( $rule['replace'] ) ) {
+			$masked = (string) $rule['replace'];
+		} elseif ( isset( $rule['mask'] ) && method_exists( $this, $rule['mask'] ) ) {
+			$masked = (string) $this->{$rule['mask']}( $value );
+		} elseif ( isset( $rule['mask'] ) && is_callable( $rule['mask'] ) ) {
+			$masked = (string) call_user_func( $rule['mask'], $value );
+		} else {
+			$masked = '***';
+		}
+
+		$offset = $m[ $group ][1] - $m[0][1];
+
+		return substr( $whole, 0, $offset ) . $masked . substr( $whole, $offset + strlen( $value ) );
+	}
+
+	/**
+	 * Keep the first four characters: Basic auth base64 and similar.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $value Value.
+	 * @return string Masked value.
+	 */
+	public function mask_keep_prefix( $value ) {
+		return substr( $value, 0, 4 ) . '***';
+	}
+
+	/**
+	 * Mask an identity document number completely.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $value Document number.
+	 * @return string Asterisks of the same length.
+	 */
+	public function mask_id_doc( $value ) {
+		return str_repeat( '*', max( 4, mb_strlen( $value, 'UTF-8' ) ) );
+	}
+
+	/**
+	 * Mask a labeled person name: keep the first character of each part.
+	 *
+	 * Unlike mask_name(), one-character parts are masked too, and
+	 * honorifics (様, さん, 殿) are kept.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $name Name.
+	 * @return string Masked name.
+	 */
+	public function mask_person_name( $name ) {
+		$parts = preg_split( '/( +)/u', $name, -1, PREG_SPLIT_DELIM_CAPTURE );
+		$out   = '';
+
+		foreach ( $parts as $part ) {
+			if ( '' === trim( $part ) || preg_match( '/^(?:様|さん|殿|御中)$/u', $part ) ) {
+				$out .= $part;
+				continue;
+			}
+
+			$length = mb_strlen( $part, 'UTF-8' );
+			$out   .= 1 === $length ? '*' : mb_substr( $part, 0, 1, 'UTF-8' ) . str_repeat( '*', $length - 1 );
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Mask a labeled address, keeping only a leading prefecture or city.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $address Address.
+	 * @return string Masked address.
+	 */
+	public function mask_labeled_address( $address ) {
+		$lead = '/^(?:' . PIIP_PII_Patterns::PREFECTURES . '|' . PIIP_PII_Patterns::DESIGNATED_CITIES . '|' . PIIP_PII_Patterns::TOKYO_WARDS . ')/u';
+
+		if ( preg_match( $lead, $address, $m ) ) {
+			return $m[0] . '***';
+		}
+
+		return '***';
+	}
+
+	/**
+	 * Mask an account, member or login ID: keep the first character.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $value ID.
+	 * @return string Masked ID.
+	 */
+	public function mask_account_id( $value ) {
+		return mb_substr( $value, 0, 1, 'UTF-8' ) . '***';
+	}
+
+	/**
+	 * Mask a secret URL (webhook): keep scheme and host.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $url URL.
+	 * @return string Masked URL.
+	 */
+	public function mask_url_secret( $url ) {
+		if ( preg_match( '#^[a-z][a-z0-9+.-]*://[^/]+/#i', $url, $m ) ) {
+			return $m[0] . '***';
+		}
+
+		return '***';
 	}
 
 	/**
@@ -841,91 +1097,6 @@ class PIIP_PII_Masker {
 	}
 
 	/**
-	 * Mask labeled password values found in text ("password: xxx").
-	 *
-	 * Keeps the label and separator, replaces the value with [REDACTED].
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with labeled passwords masked.
-	 */
-	private function mask_labeled_passwords_in_text( $text ) {
-		$replaced = preg_replace( PIIP_PII_Detector::LABELED_PASSWORD_PATTERN, '$1[REDACTED]', $text );
-
-		return null === $replaced ? $text : $replaced;
-	}
-
-	/**
-	 * Mask HTTP Basic auth credentials found in text.
-	 *
-	 * Covers curl -u user:pass (password redacted, username kept),
-	 * Authorization: Basic base64 (prefix kept, no tail - the base64 tail
-	 * decodes to the end of user:pass), and scheme://user:pass@host
-	 * (password only).
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with Basic auth credentials masked.
-	 */
-	private function mask_basic_auth_in_text( $text ) {
-		$patterns = PIIP_PII_Detector::BASIC_AUTH_PATTERNS;
-
-		$replaced = preg_replace( $patterns['curl_user'], '$1$2:[REDACTED]', $text );
-		if ( null !== $replaced ) {
-			$text = $replaced;
-		}
-
-		$replaced = preg_replace_callback(
-			$patterns['auth_basic'],
-			function ( $m ) {
-				return $m[1] . substr( $m[2], 0, 4 ) . '***';
-			},
-			$text
-		);
-		if ( null !== $replaced ) {
-			$text = $replaced;
-		}
-
-		$replaced = preg_replace( $patterns['url_userinfo'], '$1$2:***@', $text );
-
-		return null === $replaced ? $text : $replaced;
-	}
-
-	/**
-	 * Mask name self-introductions found in text (opt-in type name_text).
-	 *
-	 * 山田太郎と申します -> 山***と申します via mask_name(). Company
-	 * self-introductions (株式会社〜と申します) are left unchanged.
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with self-introduced names masked.
-	 */
-	private function mask_names_in_text( $text ) {
-		foreach ( PIIP_PII_Detector::NAME_PATTERNS as $pattern ) {
-			$replaced = preg_replace_callback(
-				$pattern,
-				function ( $m ) {
-					if ( preg_match( PIIP_PII_Detector::NAME_EXCLUSION_PATTERN, $m[2] ) ) {
-						return $m[0]; // Company self-introductions.
-					}
-					return $m[1] . $this->mask_name( $m[2] ) . ( isset( $m[3] ) ? $m[3] : '' );
-				},
-				$text
-			);
-
-			if ( null !== $replaced ) {
-				$text = $replaced;
-			}
-		}
-
-		return $text;
-	}
-
-	/**
 	 * Mask a date of birth value.
 	 *
 	 * @since 1.6.0
@@ -942,26 +1113,6 @@ class PIIP_PII_Masker {
 	}
 
 	/**
-	 * Mask labeled dates of birth found in text (label kept).
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with labeled dates of birth masked.
-	 */
-	private function mask_dob_in_text( $text ) {
-		$replaced = preg_replace_callback(
-			PIIP_PII_Detector::LABELED_DOB_PATTERN,
-			function ( $m ) {
-				return $m[1] . $this->mask_dob( $m[2] );
-			},
-			$text
-		);
-
-		return null === $replaced ? $text : $replaced;
-	}
-
-	/**
 	 * Mask a bank account number, keeping the last 4 digits.
 	 *
 	 * @since 1.6.0
@@ -971,286 +1122,6 @@ class PIIP_PII_Masker {
 	 */
 	public function mask_bank( $account ) {
 		return '***' . mb_substr( $account, -4 );
-	}
-
-	/**
-	 * Mask labeled bank account numbers found in text (label kept).
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with labeled account numbers masked.
-	 */
-	private function mask_bank_in_text( $text ) {
-		foreach ( PIIP_PII_Detector::BANK_PATTERNS as $pattern ) {
-			$replaced = preg_replace_callback(
-				$pattern,
-				function ( $m ) {
-					return $m[1] . $this->mask_bank( $m[2] );
-				},
-				$text
-			);
-
-			if ( null !== $replaced ) {
-				$text = $replaced;
-			}
-		}
-
-		return $text;
-	}
-
-	/**
-	 * Mask Japanese street addresses and labeled postal codes in text.
-	 *
-	 * Addresses keep only the prefecture (東京都新宿区西新宿2-8-1 ->
-	 * 東京都***), mirroring mask_address()'s keep-first-part style while
-	 * guaranteeing the whole span is replaced. Labeled postal codes keep
-	 * the marker (〒123-4567 -> 〒***-****).
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with addresses masked.
-	 */
-	private function mask_addresses_in_text( $text ) {
-		$replaced = preg_replace( PIIP_PII_Detector::JP_ADDRESS_PATTERN, '$1***', $text );
-		if ( null !== $replaced ) {
-			$text = $replaced;
-		}
-
-		$replaced = preg_replace( PIIP_PII_Detector::JP_POSTAL_LABELED_PATTERN, '$1***-****', $text );
-
-		return null === $replaced ? $text : $replaced;
-	}
-
-	/**
-	 * Mask private key blocks found in text.
-	 *
-	 * The whole block is replaced: partially showing key material has no
-	 * recognition value and every line of it is sensitive.
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with private key blocks masked.
-	 */
-	private function mask_private_keys_in_text( $text ) {
-		$replaced = preg_replace( PIIP_PII_Detector::PRIVATE_KEY_PATTERN, '[REDACTED]', $text );
-
-		return null === $replaced ? $text : $replaced;
-	}
-
-	/**
-	 * Mask developer secrets found in text (GitHub, Slack, AWS, Stripe, JWT).
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with developer secrets masked.
-	 */
-	private function mask_dev_secrets_in_text( $text ) {
-		foreach ( PIIP_PII_Detector::DEV_SECRET_PATTERNS as $pattern ) {
-			$replaced = preg_replace_callback(
-				$pattern,
-				function ( $m ) {
-					return $this->mask_token( $m[0] );
-				},
-				$text
-			);
-
-			if ( null !== $replaced ) {
-				$text = $replaced;
-			}
-		}
-
-		return $text;
-	}
-
-	/**
-	 * Mask Bearer tokens found in text (including JWTs).
-	 *
-	 * @since 1.6.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with Bearer tokens masked.
-	 */
-	private function mask_bearer_tokens_in_text( $text ) {
-		$replaced = preg_replace_callback(
-			PIIP_PII_Detector::BEARER_PATTERN,
-			function ( $m ) {
-				if ( ! preg_match( '/[0-9\-_+\/=.]/', $m[2] ) ) {
-					return $m[0]; // Plain words like "Bearer authentication".
-				}
-				return $m[1] . $this->mask_token( $m[2] );
-			},
-			$text
-		);
-
-		return null === $replaced ? $text : $replaced;
-	}
-
-	/**
-	 * Mask email addresses found in text.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with emails masked.
-	 */
-	private function mask_emails_in_text( $text ) {
-		$pattern = '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/';
-
-		return preg_replace_callback(
-			$pattern,
-			function ( $matches ) {
-				return $this->mask_email( $matches[0] );
-			},
-			$text
-		);
-	}
-
-	/**
-	 * Mask phone numbers found in text.
-	 *
-	 * Supports various formats:
-	 * - Japanese: 090-1234-5678, 03-1234-5678, +81-90-1234-5678
-	 * - US/International: +1-234-567-8900, (123) 456-7890
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with phones masked.
-	 */
-	private function mask_phones_in_text( $text ) {
-		// Japanese phone patterns.
-		$patterns = array(
-			// Japanese mobile patterns: 090, 080, 070 numbers.
-			'/\b0[789]0[-\s]?\d{4}[-\s]?\d{4}\b/',
-			// Japanese toll-free: 0120-xxx-xxx, 0800-xxx-xxxx (same as detector).
-			'/\b0[18]20[-\s]?\d{3}[-\s]?\d{3,4}\b/',
-			// Japanese landline patterns: area code + number.
-			'/\b0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4}\b/',
-			// International format with +.
-			'/\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{2,4}\b/',
-			// US format: (123) 456-7890.
-			'/\(\d{3}\)\s?\d{3}[-\s]?\d{4}/',
-		);
-
-		foreach ( $patterns as $pattern ) {
-			$text = preg_replace_callback(
-				$pattern,
-				function ( $matches ) {
-					return $this->mask_phone( $matches[0] );
-				},
-				$text
-			);
-		}
-
-		return $text;
-	}
-
-	/**
-	 * Mask credit card numbers found in text.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with credit cards masked.
-	 */
-	private function mask_credit_cards_in_text( $text ) {
-		// Pattern for 13-19 digit numbers with optional separators.
-		$pattern = '/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{1,7}\b/';
-
-		return preg_replace_callback(
-			$pattern,
-			function ( $matches ) {
-				$digits = preg_replace( '/\D/', '', $matches[0] );
-				// Only mask if it looks like a credit card (13-19 digits).
-				if ( strlen( $digits ) >= 13 && strlen( $digits ) <= 19 ) {
-					return $this->mask_credit_card( $matches[0] );
-				}
-				return $matches[0];
-			},
-			$text
-		);
-	}
-
-	/**
-	 * Mask SSNs found in text.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with SSNs masked.
-	 */
-	private function mask_ssns_in_text( $text ) {
-		// US SSN pattern: 123-45-6789 or 123 45 6789.
-		$pattern = '/\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/';
-
-		return preg_replace_callback(
-			$pattern,
-			function ( $matches ) {
-				// Validate SSN format.
-				$digits = preg_replace( '/\D/', '', $matches[0] );
-				if ( 9 === strlen( $digits ) ) {
-					$area = substr( $digits, 0, 3 );
-					// SSN cannot start with 000, 666, or 9xx.
-					if ( '000' !== $area && '666' !== $area && '9' !== $area[0] ) {
-						return $this->mask_ssn( $matches[0] );
-					}
-				}
-				return $matches[0];
-			},
-			$text
-		);
-	}
-
-	/**
-	 * Mask Japanese My Number (12 digits) found in text.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with My Numbers masked.
-	 */
-	private function mask_mynumber_in_text( $text ) {
-		// My Number pattern: 1234-5678-9012 or 123456789012.
-		$pattern = '/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/';
-
-		return preg_replace_callback(
-			$pattern,
-			function ( $matches ) {
-				$digits = preg_replace( '/\D/', '', $matches[0] );
-				// My Number is exactly 12 digits.
-				if ( 12 === strlen( $digits ) && $this->validate_mynumber( $digits ) ) {
-					return $this->mask_mynumber( $matches[0] );
-				}
-				return $matches[0];
-			},
-			$text
-		);
-	}
-
-	/**
-	 * Validate Japanese My Number check digit.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $number The 12-digit number.
-	 * @return bool True if valid, false otherwise.
-	 */
-	private function validate_mynumber( $number ) {
-		$weights = array( 6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2 );
-		$sum     = 0;
-
-		for ( $i = 0; $i < 11; $i++ ) {
-			$sum += (int) $number[ $i ] * $weights[ $i ];
-		}
-
-		$remainder   = $sum % 11;
-		$check_digit = ( $remainder <= 1 ) ? 0 : ( 11 - $remainder );
-
-		return (int) $number[11] === $check_digit;
 	}
 
 	/**
@@ -1273,69 +1144,6 @@ class PIIP_PII_Masker {
 	}
 
 	/**
-	 * Mask hosting account/server IDs found in text.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with hosting IDs masked.
-	 */
-	private function mask_hosting_ids_in_text( $text ) {
-		// Hosting ID patterns (same as detector).
-		$patterns = array(
-			// Xserver: xs123456, sv1234.
-			'xserver_account' => '/\bxs\d{5,8}\b/i',
-			'xserver_server'  => '/\bsv\d{3,5}\b/i',
-			// Sakura: abc12345, *.sakura.ne.jp.
-			'sakura_account'  => '/\b[a-z]{3}\d{5}\b/i',
-			'sakura_domain'   => '/\b[\w-]+\.sakura\.ne\.jp\b/i',
-			// ConoHa: gnc*.
-			'conoha_account'  => '/\bgnc[a-z0-9]{8,12}\b/i',
-			// Lolipop: *.lolipop.jp.
-			'lolipop_domain'  => '/\b[\w-]+\.lolipop\.jp\b/i',
-			// mixhost: *.mixh.jp.
-			'mixhost_domain'  => '/\b[\w-]+\.mixh\.jp\b/i',
-			// Azure GUID.
-			'azure_guid'      => '/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i',
-		);
-
-		foreach ( $patterns as $name => $pattern ) {
-			$text = preg_replace_callback(
-				$pattern,
-				function ( $matches ) {
-					return $this->mask_hosting_id( $matches[0] );
-				},
-				$text
-			);
-		}
-
-		return $text;
-	}
-
-	/**
-	 * Mask IP addresses found in text.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param string $text Text to process.
-	 * @return string Text with IP addresses masked.
-	 */
-	private function mask_ip_addresses_in_text( $text ) {
-		// IPv4 pattern.
-		$ipv4_pattern = '/\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/';
-
-		$text = preg_replace_callback(
-			$ipv4_pattern,
-			function ( $matches ) {
-				return $this->mask_ip( $matches[0] );
-			},
-			$text
-		);
-
-		return $text;
-	}
-
-	/**
 	 * Mask IP address.
 	 *
 	 * @since 1.0.0
@@ -1344,6 +1152,10 @@ class PIIP_PII_Masker {
 	 * @return string Masked IP.
 	 */
 	public function mask_ip( $ip ) {
+		if ( false !== filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+			return $this->mask_ipv6( $ip );
+		}
+
 		$parts = explode( '.', $ip );
 		if ( 4 === count( $parts ) ) {
 			// Keep first octet, mask the rest.
@@ -1353,61 +1165,31 @@ class PIIP_PII_Masker {
 	}
 
 	/**
-	 * Mask AI API keys found in text.
+	 * Mask an IPv6 address.
 	 *
-	 * Detects and masks various AI service API keys:
-	 * - OpenAI: sk-, sk-proj-
-	 * - Anthropic Claude: sk-ant-
-	 * - Google AI: AIza
-	 * - Hugging Face: hf_
-	 * - Replicate: r8_
-	 * - Cohere: -*co
-	 * - Azure OpenAI: 32-char hex
-	 * - Generic: sk-, ai-, api-
+	 * Keeps the first two groups (the provider-level /32 prefix) and hides
+	 * the rest: 2001:db8:85a3::8a2e:370:7334 -> 2001:db8:***.
 	 *
-	 * @since 1.2.1
+	 * @since 1.7.0
 	 *
-	 * @param string $text Text to process.
-	 * @return string Text with AI API keys masked.
+	 * @param string $ip IPv6 address.
+	 * @return string Masked IPv6 address.
 	 */
-	private function mask_ai_keys_in_text( $text ) {
-		// AI API key patterns (same as in detector class).
-		$patterns = array(
-			// OpenAI: sk- or sk-proj- followed by alphanumeric.
-			'/\bsk-proj-[A-Za-z0-9]{40,}\b/',
-			'/\bsk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}\b/',
-			'/\bsk-[A-Za-z0-9]{48}\b/',
-			// Anthropic Claude: sk-ant- followed by alphanumeric/dashes.
-			'/\bsk-ant-[A-Za-z0-9_-]{95,100}\b/',
-			// Google AI Studio: AIza followed by alphanumeric/dashes (at least 30 chars total).
-			'/\bAIza[A-Za-z0-9_-]{30,}\b/',
-			// Hugging Face: hf_ followed by alphanumeric.
-			'/\bhf_[A-Za-z0-9]{30,}\b/',
-			// Replicate: r8_ followed by alphanumeric.
-			'/\br8_[A-Za-z0-9]{30,}\b/',
-			// Cohere: ends with -co (at least 30 chars total).
-			'/\b[A-Za-z0-9]{30,}-co\b/',
-			// Azure OpenAI: 32-character hex string.
-			'/\b[a-fA-F0-9]{32}\b/',
-			// Generic AI API keys: sk-, ai-, api- followed by alphanumeric.
-			'/\b(?:sk|ai|api)-[A-Za-z0-9_-]{20,}\b/',
-		);
-
-		foreach ( $patterns as $pattern ) {
-			$text = preg_replace_callback(
-				$pattern,
-				function ( $matches ) {
-					// Verify it's actually an AI key using the detector.
-					if ( $this->detector->is_ai_key( $matches[0] ) ) {
-						return $this->mask_token( $matches[0] );
-					}
-					return $matches[0];
-				},
-				$text
-			);
+	private function mask_ipv6( $ip ) {
+		$packed = inet_pton( $ip );
+		if ( false === $packed ) {
+			return '***';
 		}
 
-		return $text;
+		$groups = array_map(
+			function ( $group ) {
+				$group = ltrim( $group, '0' );
+				return '' === $group ? '0' : $group;
+			},
+			str_split( bin2hex( $packed ), 4 )
+		);
+
+		return $groups[0] . ':' . $groups[1] . ':***';
 	}
 
 	/**

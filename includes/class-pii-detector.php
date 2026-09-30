@@ -262,8 +262,8 @@ class PIIP_PII_Detector {
 	private $ip_patterns = array(
 		// IPv4.
 		'ipv4' => '/\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/',
-		// IPv6 (simplified).
-		'ipv6' => '/\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b/',
+		// IPv6: candidates only; see is_maskable_ipv6().
+		'ipv6' => self::IPV6_CANDIDATE_PATTERN,
 	);
 
 	/**
@@ -410,13 +410,50 @@ class PIIP_PII_Detector {
 	 * @var array
 	 */
 	public const DEV_SECRET_PATTERNS = array(
-		'github_token'   => '/\bgh[pousr]_[A-Za-z0-9]{36,251}\b/',
-		'github_pat'     => '/\bgithub_pat_[A-Za-z0-9_]{22,255}\b/',
-		'slack_token'    => '/\bxox[baprs]-[A-Za-z0-9\-]{10,250}\b/',
-		'aws_access_key' => '/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/',
-		'stripe_key'     => '/\b[sr]k_live_[A-Za-z0-9]{16,247}\b/',
-		'jwt'            => '/\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b/',
+		'github_token'    => '/\bgh[pousr]_[A-Za-z0-9]{36,251}\b/',
+		'github_pat'      => '/\bgithub_pat_[A-Za-z0-9_]{22,255}\b/',
+		'slack_token'     => '/\bxox[baprs]-[A-Za-z0-9\-]{10,250}\b/',
+		'aws_access_key'  => '/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/',
+		'stripe_key'      => '/\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,247}\b/',
+		'jwt'             => '/\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b/',
+		// Since 1.7.0.
+		'stripe_webhook'  => '/\bwhsec_[A-Za-z0-9]{24,}\b/',
+		'google_oauth'    => '/\bya29\.[A-Za-z0-9_\-]{20,}/',
+		'sendgrid'        => '/\bSG\.[A-Za-z0-9_\-]{16,32}\.[A-Za-z0-9_\-]{16,64}\b/',
+		'npm_token'       => '/\bnpm_[A-Za-z0-9]{36}\b/',
+		'gitlab_token'    => '/\bglpat-[A-Za-z0-9_\-]{20,}\b/',
+		'twilio_key'      => '/\bSK[0-9a-fA-F]{32}\b/',
+		'mailgun_key'     => '/\bkey-[0-9a-f]{32}\b/',
+		'shopify_token'   => '/\bshp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}\b/',
+		'telegram_bot'    => '/\b[0-9]{8,10}:AA[A-Za-z0-9_\-]{33}\b/',
+		'digitalocean'    => '/\bdo[por]_v1_[a-f0-9]{64}\b/',
+		'slack_webhook'   => '/\bhttps:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9_\/\-]{20,}/',
+		'discord_webhook' => '/\bhttps:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_\-]{20,}/',
 	);
+
+	/**
+	 * IPv6 address candidates in free text.
+	 *
+	 * Deliberately loose (also matches clock times and C++ scopes); every
+	 * match must pass is_maskable_ipv6(). A trailing ".digit" is excluded so
+	 * IPv4-mapped forms (::ffff:192.0.2.1) are left to the IPv4 pattern.
+	 *
+	 * @since 1.7.0
+	 * @var string
+	 */
+	public const IPV6_CANDIDATE_PATTERN = '/(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:]|\.\d)/';
+
+	/**
+	 * Characters never allowed in a custom pattern replacement.
+	 *
+	 * Masking can run after HTML sanitization (e.g. BuddyPress activity),
+	 * so a replacement must not be able to open a tag or leave an
+	 * attribute value.
+	 *
+	 * @since 1.7.0
+	 * @var string
+	 */
+	public const UNSAFE_REPLACEMENT_CHARS = '<>"\'`';
 
 	/**
 	 * SSH/PEM/PGP private key block pattern.
@@ -427,7 +464,7 @@ class PIIP_PII_Detector {
 	 * @since 1.6.0
 	 * @var string
 	 */
-	public const PRIVATE_KEY_PATTERN = '/-----BEGIN [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----[\s\S]+?-----END [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----/';
+	public const PRIVATE_KEY_PATTERN = '/-----BEGIN [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----(?:[A-Za-z0-9+\/=:,.\s-]|<br\s*\/?>)+?-----END [A-Z ]{0,48}PRIVATE KEY(?: BLOCK)?-----/';
 
 	/**
 	 * Japanese street address pattern for free text.
@@ -520,12 +557,24 @@ class PIIP_PII_Detector {
 	 * @var array
 	 */
 	public const DEV_SECRET_PROVIDERS = array(
-		'github_token'   => 'GitHub',
-		'github_pat'     => 'GitHub',
-		'slack_token'    => 'Slack',
-		'aws_access_key' => 'AWS',
-		'stripe_key'     => 'Stripe',
-		'jwt'            => 'JWT',
+		'github_token'    => 'GitHub',
+		'github_pat'      => 'GitHub',
+		'slack_token'     => 'Slack',
+		'aws_access_key'  => 'AWS',
+		'stripe_key'      => 'Stripe',
+		'jwt'             => 'JWT',
+		'stripe_webhook'  => 'Stripe',
+		'google_oauth'    => 'Google OAuth',
+		'sendgrid'        => 'SendGrid',
+		'npm_token'       => 'npm',
+		'gitlab_token'    => 'GitLab',
+		'twilio_key'      => 'Twilio',
+		'mailgun_key'     => 'Mailgun',
+		'shopify_token'   => 'Shopify',
+		'telegram_bot'    => 'Telegram',
+		'digitalocean'    => 'DigitalOcean',
+		'slack_webhook'   => 'Slack webhook',
+		'discord_webhook' => 'Discord webhook',
 	);
 
 	/**
@@ -602,6 +651,15 @@ class PIIP_PII_Detector {
 	 */
 	private function detect_by_field_name( $field_name ) {
 		$field_name_lower = strtolower( $field_name );
+
+		// Exact names win over substrings (remote_addr is an IP, not an address).
+		foreach ( $this->field_patterns as $type => $patterns ) {
+			foreach ( $patterns as $pattern ) {
+				if ( strtolower( $pattern ) === $field_name_lower ) {
+					return $type;
+				}
+			}
+		}
 
 		foreach ( $this->field_patterns as $type => $patterns ) {
 			foreach ( $patterns as $pattern ) {
@@ -846,14 +904,9 @@ class PIIP_PII_Detector {
 			return true;
 		}
 
-		// Fallback to regex.
-		foreach ( $this->ip_patterns as $pattern ) {
-			if ( 1 === preg_match( $pattern, $value ) ) {
-				return true;
-			}
-		}
-
-		return false;
+		// Fallback to an embedded IPv4 address; IPv6 needs full validation,
+		// which filter_var() above already covered.
+		return 1 === preg_match( $this->ip_patterns['ipv4'], $value );
 	}
 
 	/**
@@ -1112,20 +1165,44 @@ class PIIP_PII_Detector {
 	}
 
 	/**
-	 * Validate credit card using Luhn algorithm.
+	 * Check whether a string is an IPv6 address worth masking.
 	 *
-	 * @since 1.0.0
+	 * Requires a valid IPv6 address with at least three non-empty groups,
+	 * which skips "::", "::1" and short scope-like strings such as "a::b".
 	 *
-	 * @param string $number The card number to validate.
-	 * @return bool True if valid, false otherwise.
+	 * @since 1.7.0
+	 *
+	 * @param string $value Candidate string.
+	 * @return bool True if the value should be treated as an IPv6 address.
 	 */
-	private function validate_luhn( $number ) {
+	public static function is_maskable_ipv6( $value ) {
+		if ( false === filter_var( $value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+			return false;
+		}
+
+		return count( array_filter( explode( ':', $value ), 'strlen' ) ) >= 3;
+	}
+
+	/**
+	 * Check a digit string with the Luhn algorithm.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $digits Digits only.
+	 * @return bool True if the checksum is valid.
+	 */
+	public static function is_luhn_valid( $digits ) {
+		$digits = (string) $digits;
+		if ( '' === $digits || ! ctype_digit( $digits ) ) {
+			return false;
+		}
+
 		$sum        = 0;
-		$num_digits = strlen( $number );
+		$num_digits = strlen( $digits );
 		$parity     = $num_digits % 2;
 
 		for ( $i = 0; $i < $num_digits; $i++ ) {
-			$digit = (int) $number[ $i ];
+			$digit = (int) $digits[ $i ];
 
 			if ( $i % 2 === $parity ) {
 				$digit *= 2;
@@ -1139,6 +1216,30 @@ class PIIP_PII_Detector {
 		}
 
 		return 0 === ( $sum % 10 );
+	}
+
+	/**
+	 * Remove characters that could break out of HTML from a replacement.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param string $replacement Replacement text.
+	 * @return string Safe replacement text.
+	 */
+	public static function sanitize_replacement( $replacement ) {
+		return str_replace( str_split( self::UNSAFE_REPLACEMENT_CHARS ), '', (string) $replacement );
+	}
+
+	/**
+	 * Validate credit card using Luhn algorithm.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $number The card number to validate.
+	 * @return bool True if valid, false otherwise.
+	 */
+	private function validate_luhn( $number ) {
+		return self::is_luhn_valid( $number );
 	}
 
 	/**
@@ -1182,90 +1283,55 @@ class PIIP_PII_Detector {
 	}
 
 	/**
-	 * Find all PII in text content.
+	 * Find all PII in free text.
+	 *
+	 * Uses the same rules as PIIP_PII_Masker::mask_text() (see
+	 * PIIP_PII_Patterns), on the same normalized text, so every reported
+	 * item is one that masking handles when its type is enabled. Values are
+	 * reported in normalized (half-width) form. URLs are reported for
+	 * information only; they are never masked.
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 Shares its rules with masking; full-width aware.
 	 *
 	 * @param string $text Text to scan.
-	 * @return array Array of found PII with type and value.
+	 * @return array List of {type, value, provider?}.
 	 */
 	public function find_all_pii( $text ) {
 		$found = array();
+		$text  = PIIP_PII_Patterns::normalize( (string) $text );
 
-		// Find emails.
-		if ( preg_match_all( $this->email_pattern, $text, $matches ) ) {
-			foreach ( $matches[0] as $match ) {
-				$found[] = array(
-					'type'  => 'email',
-					'value' => $match,
+		foreach ( PIIP_PII_Patterns::get_text_rules() as $rule ) {
+			if ( ! preg_match_all( $rule['regex'], $text, $matches, PREG_SET_ORDER ) ) {
+				continue;
+			}
+
+			$group = isset( $rule['group'] ) ? (int) $rule['group'] : 0;
+			foreach ( $matches as $m ) {
+				if ( ! isset( $m[ $group ] ) || '' === $m[ $group ] ) {
+					continue;
+				}
+
+				$value = $m[ $group ];
+				if ( ! PIIP_PII_Patterns::validate( $rule, $value, $this ) ) {
+					continue;
+				}
+
+				$item = array(
+					'type'  => $rule['type'],
+					'value' => $value,
 				);
-			}
-		}
-
-		// Find phones.
-		foreach ( $this->phone_patterns as $name => $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[0] as $match ) {
-					$found[] = array(
-						'type'  => 'phone',
-						'value' => $match,
-					);
+				if ( ! empty( $rule['provider'] ) ) {
+					$item['provider'] = $rule['provider'];
+				} elseif ( ! empty( $rule['provider_cb'] ) && method_exists( $this, $rule['provider_cb'] ) ) {
+					$item['provider'] = $this->{$rule['provider_cb']}( $value );
 				}
+
+				$found[] = $item;
 			}
 		}
 
-		// Find credit cards.
-		foreach ( $this->card_patterns as $name => $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[0] as $match ) {
-					$digits = preg_replace( '/\D/', '', $match );
-					if ( $this->validate_luhn( $digits ) ) {
-						$found[] = array(
-							'type'  => 'card',
-							'value' => $match,
-						);
-					}
-				}
-			}
-		}
-
-		// Find SSN.
-		if ( preg_match_all( $this->ssn_pattern, $text, $matches ) ) {
-			foreach ( $matches[0] as $match ) {
-				if ( $this->is_ssn( $match ) ) {
-					$found[] = array(
-						'type'  => 'ssn',
-						'value' => $match,
-					);
-				}
-			}
-		}
-
-		// Find My Number.
-		if ( preg_match_all( $this->mynumber_pattern, $text, $matches ) ) {
-			foreach ( $matches[0] as $match ) {
-				if ( $this->is_mynumber( $match ) ) {
-					$found[] = array(
-						'type'  => 'ssn',
-						'value' => $match,
-					);
-				}
-			}
-		}
-
-		// Find IP addresses.
-		foreach ( $this->ip_patterns as $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[0] as $match ) {
-					$found[] = array(
-						'type'  => 'ip',
-						'value' => $match,
-					);
-				}
-			}
-		}
-
-		// Find URLs.
+		// URLs: informational.
 		if ( preg_match_all( $this->url_pattern, $text, $matches ) ) {
 			foreach ( $matches[0] as $match ) {
 				$found[] = array(
@@ -1275,196 +1341,7 @@ class PIIP_PII_Detector {
 			}
 		}
 
-		// Find hosting account/server IDs.
-		foreach ( $this->hosting_patterns as $name => $pattern ) {
-			// GCP project IDs are indistinguishable from ordinary lowercase
-			// words in free text and mask_text() does not mask them; the
-			// pattern only makes sense for whole field values (is_hosting_id).
-			if ( 'gcp_project' === $name ) {
-				continue;
-			}
-
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[0] as $match ) {
-					// Skip false positives.
-					if ( 'aws_account' === $name ) {
-						$digits = preg_replace( '/\D/', '', $match );
-						if ( 12 !== strlen( $digits ) || 12 !== strlen( $match ) ) {
-							continue;
-						}
-					}
-					if ( 'gcp_project' === $name ) {
-						$common_words = array( 'example', 'default', 'project', 'website', 'content', 'message', 'activity' );
-						if ( in_array( strtolower( $match ), $common_words, true ) ) {
-							continue;
-						}
-					}
-					$found[] = array(
-						'type'     => 'hosting',
-						'value'    => $match,
-						'provider' => $this->get_hosting_provider( $match ),
-					);
-				}
-			}
-		}
-
-		// Find AI API keys.
-		foreach ( $this->ai_key_patterns as $name => $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[0] as $match ) {
-					// Additional validation for specific providers.
-					if ( 'azure_openai' === $name ) {
-						if ( 32 === strlen( $match ) && ctype_xdigit( $match ) ) {
-							$unique_chars = count( array_unique( str_split( strtolower( $match ) ) ) );
-							if ( $unique_chars >= 8 ) {
-								$found[] = array(
-									'type'     => 'token',
-									'value'    => $match,
-									'provider' => $this->get_ai_provider( $match ),
-								);
-							}
-						}
-						continue;
-					}
-
-					if ( 'generic_ai_key' === $name ) {
-						if ( preg_match( '/^(sk-|ai-|api-)/i', $match ) ) {
-							$found[] = array(
-								'type'     => 'token',
-								'value'    => $match,
-								'provider' => $this->get_ai_provider( $match ),
-							);
-						}
-						continue;
-					}
-
-					$found[] = array(
-						'type'     => 'token',
-						'value'    => $match,
-						'provider' => $this->get_ai_provider( $match ),
-					);
-				}
-			}
-		}
-
-		// Find labeled passwords ("password: xxx").
-		if ( preg_match_all( self::LABELED_PASSWORD_PATTERN, $text, $matches ) ) {
-			foreach ( $matches[2] as $match ) {
-				$found[] = array(
-					'type'  => 'password',
-					'value' => $match,
-				);
-			}
-		}
-
-		// Find HTTP Basic auth credentials (curl -u, Authorization: Basic, URL userinfo).
-		foreach ( self::BASIC_AUTH_PATTERNS as $name => $pattern ) {
-			$secret_group = 'auth_basic' === $name ? 2 : 3;
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[ $secret_group ] as $match ) {
-					$found[] = array(
-						'type'     => 'token',
-						'value'    => $match,
-						'provider' => 'Basic auth',
-					);
-				}
-			}
-		}
-
-		// Find Bearer tokens (including JWTs).
-		if ( preg_match_all( self::BEARER_PATTERN, $text, $matches ) ) {
-			foreach ( $matches[2] as $match ) {
-				if ( ! preg_match( '/[0-9\-_+\/=.]/', $match ) ) {
-					continue; // Plain words like "Bearer authentication".
-				}
-				$found[] = array(
-					'type'     => 'token',
-					'value'    => $match,
-					'provider' => 'Bearer token',
-				);
-			}
-		}
-
-		// Find private key blocks.
-		if ( preg_match_all( self::PRIVATE_KEY_PATTERN, $text, $matches ) ) {
-			foreach ( $matches[0] as $match ) {
-				$found[] = array(
-					'type'     => 'token',
-					'value'    => $match,
-					'provider' => 'Private key',
-				);
-			}
-		}
-
-		// Find developer secrets (GitHub, Slack, AWS, Stripe, JWT).
-		foreach ( self::DEV_SECRET_PATTERNS as $name => $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[0] as $match ) {
-					$found[] = array(
-						'type'     => 'token',
-						'value'    => $match,
-						'provider' => self::DEV_SECRET_PROVIDERS[ $name ],
-					);
-				}
-			}
-		}
-
-		// Find labeled dates of birth.
-		if ( preg_match_all( self::LABELED_DOB_PATTERN, $text, $matches ) ) {
-			foreach ( $matches[2] as $match ) {
-				$found[] = array(
-					'type'  => 'dob',
-					'value' => $match,
-				);
-			}
-		}
-
-		// Find labeled bank account numbers.
-		foreach ( self::BANK_PATTERNS as $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[2] as $match ) {
-					$found[] = array(
-						'type'  => 'bank',
-						'value' => $match,
-					);
-				}
-			}
-		}
-
-		// Find Japanese street addresses and labeled postal codes.
-		if ( preg_match_all( self::JP_ADDRESS_PATTERN, $text, $matches ) ) {
-			foreach ( $matches[0] as $match ) {
-				$found[] = array(
-					'type'  => 'address',
-					'value' => $match,
-				);
-			}
-		}
-		if ( preg_match_all( self::JP_POSTAL_LABELED_PATTERN, $text, $matches ) ) {
-			foreach ( $matches[2] as $match ) {
-				$found[] = array(
-					'type'  => 'address',
-					'value' => $match,
-				);
-			}
-		}
-
-		// Find name self-introductions (opt-in type; masking is off by default).
-		foreach ( self::NAME_PATTERNS as $pattern ) {
-			if ( preg_match_all( $pattern, $text, $matches ) ) {
-				foreach ( $matches[2] as $match ) {
-					if ( preg_match( self::NAME_EXCLUSION_PATTERN, $match ) ) {
-						continue; // Company self-introductions.
-					}
-					$found[] = array(
-						'type'  => 'name_text',
-						'value' => $match,
-					);
-				}
-			}
-		}
-
-		// Find site-defined custom patterns.
+		// Site-defined custom patterns.
 		foreach ( self::get_custom_patterns() as $custom ) {
 			if ( preg_match_all( $custom['regex'], $text, $matches ) ) {
 				foreach ( $matches[0] as $match ) {
@@ -1516,7 +1393,8 @@ class PIIP_PII_Detector {
 			$patterns[] = array(
 				'label'       => isset( $row['label'] ) && '' !== $row['label'] ? $row['label'] : __( 'Custom pattern', 'piip-pii-protection' ),
 				'regex'       => $regex,
-				'replacement' => isset( $row['replacement'] ) && '' !== $row['replacement'] ? $row['replacement'] : '***',
+				// Sanitized again here for rows saved before 1.7.0.
+				'replacement' => isset( $row['replacement'] ) && '' !== self::sanitize_replacement( $row['replacement'] ) ? self::sanitize_replacement( $row['replacement'] ) : '***',
 			);
 		}
 
@@ -1548,6 +1426,8 @@ class PIIP_PII_Detector {
 			'name'      => 0.50, // Context-dependent.
 			'name_text' => 0.60, // Strong context markers, but names are hard.
 			'dob'       => 0.75, // Labeled matches in text; date could still be another's.
+			'contact'   => 0.85, // Labeled inquiry-style fields.
+			'id_doc'    => 0.90, // Labeled document numbers.
 			'bank'      => 0.85, // Labeled matches only.
 			'custom'    => 1.00, // Exact match of a site-defined pattern.
 		);
