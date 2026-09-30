@@ -2,9 +2,9 @@
 Contributors: benridane, presents111
 Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,11 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 
 * **Automatic PII Detection**: Intelligently detects multiple types of PII including emails, phone numbers, addresses, credit cards, SSN/My Number, passwords, API tokens, IP addresses, and hosting account IDs
 * **Server-Side Masking**: All masking happens on the server (PHP) for maximum security - cannot be bypassed by users
-* **WordPress Core Support**: Native support for WordPress comments
+* **WordPress Core Support**: Native support for WordPress comments - from the comment form, the REST API (including block editor notes) and later edits - with per-type selection (comments, product reviews, notes, other types)
+* **Commenter IP Anonymization**: Optionally store commenter IP addresses anonymized (192.0.2.123 → 192.0.2.0), the same way WordPress anonymizes them for personal data erasure
+* **Inquiry-Style Text Protection**: Catches contact details posted to a forum by mistake instead of a contact form - labeled names, furigana, addresses, phone numbers, member/login IDs, card expiry dates and security codes (お名前：… / 住所：… / Name: … / Address: …)
+* **Full-Width Aware**: Full-width digits and symbols typed with a Japanese IME (０９０－１２３４－５６７８, ｔａｒｏ＠ｅｘａｍｐｌｅ．ｊｐ) are detected; text outside masked parts keeps its original width
+* **Abilities API**: `piip/mask-text` and `piip/scan-content` abilities let MCP clients and AI agents mask text and audit stored content without ever receiving raw PII
 * **Community Plugin Support**: Works seamlessly with wpForo, BuddyPress, bbPress, and other popular community plugins
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
 * **Consent Opt-Out**: Users can include consent phrases to skip masking when sharing personal info publicly
@@ -30,25 +34,29 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 = Supported PII Types =
 
 * Email addresses (example@domain.com → e***@domain.com)
-* Phone numbers (Japanese mobile/landline, international formats)
+* Phone numbers (Japanese mobile/landline, parenthesized 03(1234)5678, toll-free/navi dial 0120/0570, international, US formats)
 * Japanese street addresses in free text (東京都新宿区西新宿2-8-1 → 東京都***) and labeled postal codes (〒123-4567 → 〒***-****)
 * Credit card numbers with Luhn validation (4532-1234-5678-9010 → ****-****-****-9010)
 * Social Security Numbers / Japanese My Number with check digit validation
-* Passwords, including labeled values in free text (password: xxx / パスワードは xxx → [REDACTED])
+* Passwords, including labeled values in free text (password: xxx / パスワードは xxx / PW: xxx → [REDACTED]) and pasted configuration (define( 'DB_PASSWORD', '…' ), SMTP_PASSWORD=…, aws_secret_access_key = …)
 * HTTP credentials: Basic auth (curl -u, Authorization: Basic, user:pass@host URLs) and Bearer tokens (including JWTs)
-* Developer secrets: GitHub, Slack, AWS, Stripe tokens and SSH/PEM private key blocks
+* Developer secrets: GitHub, GitLab, Slack (tokens and webhooks), Discord webhooks, AWS, Stripe, Google OAuth, SendGrid, npm, Twilio, Mailgun, Shopify, Telegram, DigitalOcean tokens and SSH/PEM private key blocks
 * API Tokens/Keys (partial masking showing first and last 4 characters)
 * AI API Keys (OpenAI sk-***, Anthropic sk-ant-***, Google AIza***, Hugging Face hf_***, Replicate r8_***, Cohere, Azure OpenAI)
 * Labeled dates of birth (生年月日: 1990-01-15 → ****-**-**)
 * Labeled bank account numbers (口座番号: 1234567 → ***4567)
+* Labeled contact details in inquiry-style text: name, furigana, address, phone, member/login ID, card expiry and security code (お名前：山田 太郎 → お名前：山* 太*)
+* Labeled ID document numbers: passport, driver's license, health insurance, basic pension, residence card
+* Japanese addresses written without the prefecture, for designated cities and Tokyo's 23 wards (横浜市中区山下町1-2-3 → 横浜市***)
 * Names in self-introduction phrases (山田太郎と申します → 山***と申します; opt-in, off by default)
-* IP Addresses (192.168.1.1 → 192.***.***1)
+* IP Addresses: IPv4 (192.168.1.1 → 192.***.***.1) and IPv6, including compressed forms (2001:db8::8a2e:370:7334 → 2001:db8:***)
 * Hosting Account IDs (XServer, Sakura, AWS, Azure, GCP, ConoHa, Lolipop, mixhost)
 
 = Supported Integrations =
 
 * **WordPress Core**
-  * Comments
+  * Comments (comment form, REST API, edits; selectable types: comments, product reviews, block editor notes, other types)
+  * Commenter IP addresses (optional anonymization)
   * User Profiles (display name, nickname, biographical info)
 * **Form Plugins**
   * Contact Form 7 (free-text fields; protects sent mail and stored copies such as Flamingo)
@@ -105,6 +113,20 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 
 Yes! PIIP has native support for WordPress core comments. Simply enable the Comments integration in Settings → PII Protection.
 
+Comments are masked whether they are submitted through the comment form, created through the REST API (for example by headless front ends or apps), or edited later. You can choose which comment types are masked: regular comments, product reviews (e.g. WooCommerce), block editor notes (off by default, as they are internal editorial comments), and other types such as pingbacks.
+
+= Can PIIP anonymize commenter IP addresses? =
+
+Yes. Set "Commenter IP addresses" to "Anonymize before saving" in Settings → PII Protection. The last part of the address is zeroed (192.0.2.123 becomes 192.0.2.0; IPv6 keeps the first 48 bits) for new and edited comments. Existing comments are not changed. Because the address is anonymized rather than removed, WordPress flood protection keeps working, per network block instead of per address.
+
+= Someone posted their contact details to the forum instead of the contact form. Does PIIP catch that? =
+
+Yes. With "Labeled contact details" enabled (the default), labeled fields typical of inquiry forms are masked: お名前/氏名, フリガナ, 住所/お届け先, 電話番号/TEL/携帯, 会員番号/ログインID, 有効期限, セキュリティコード and their English equivalents (Name, Address, Phone, Member ID, Expiry, CVV). Email addresses, postal codes, dates of birth, bank accounts and passwords in the same message are masked by their own types. Bare 名前/Name labels are only recognized at the start of a line, so technical text such as 変数の名前: foo is left alone.
+
+= Can AI agents or MCP clients use PIIP? =
+
+Yes. PIIP registers two abilities with the WordPress Abilities API: `piip/mask-text` masks a piece of text with your site's settings (users who can edit posts), and `piip/scan-content` runs a read-only scan of stored comments or posts (administrators). Results contain masked text and PII types only, never the raw values. They are available through the Abilities REST API and to MCP adapters that expose public abilities.
+
 = Does this work with wpForo? =
 
 Yes! PIIP has native integration with wpForo and will automatically mask PII in forum topics, posts, and private messages.
@@ -148,6 +170,35 @@ Also note that detection is pattern-based and may not catch every piece of perso
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.7.0 - 2026-09-28 =
+* **New**: Choose which comment types are masked - comments, product reviews, block editor notes, and other types (pingbacks, trackbacks, custom types). Notes are off by default
+* **New**: Optional anonymization of commenter IP addresses (Settings → PII Protection → Commenter IP addresses)
+* **New**: Abilities API support - `piip/mask-text` and `piip/scan-content` abilities for MCP clients and AI agents; results never include raw PII
+* **New**: `piip_mask_comment_type` filter to decide per comment type whether a comment is masked
+* **New**: Inquiry-style text protection (new PII type "Labeled contact details", on by default) - labeled names, furigana, addresses, phones, member/login IDs, card expiry and security codes, as posted when a forum is mistaken for a contact form
+* **New**: Labeled ID document numbers (new PII type, on by default) - passport, driver's license, health insurance, basic pension and residence card numbers
+* **New**: Full-width digits and symbols are detected (０９０－１２３４－５６７８, ｔａｒｏ＠ｅｘａｍｐｌｅ．ｊｐ); text outside masked parts keeps its original width
+* **New**: More phone formats - 03(1234)5678, 090(1234)5678, 0570/0990 numbers, US 1-800-555-0199
+* **New**: Amex (4-6-5) and Diners (4-6-4) card groupings
+* **New**: More password labels (PW, P/W, PIN, passcode, ログインパス) and pasted configuration secrets (define( 'DB_PASSWORD', … ), *_PASSWORD=, *_SECRET=, *_TOKEN=, api_key=)
+* **New**: More service tokens - Google OAuth, Stripe test/restricted/webhook secrets, SendGrid, npm, GitLab, Twilio, Mailgun, Shopify, Telegram, DigitalOcean, Slack and Discord webhook URLs
+* **New**: Japanese addresses without the prefecture for designated cities and Tokyo's 23 wards
+* **New**: `piip_text_rules` filter to add or change free-text detection rules
+* **Changed**: Detection and masking now share one set of rules, so the preview, the PII scan and the Abilities API report exactly what masking handles
+* **New**: IPv6 addresses in text are masked, including compressed forms (2001:db8::1 → 2001:db8:***)
+* **Security**: Fixed a stored XSS where a private key block spanning HTML markup could rewrite tag attributes in integrations that mask after HTML sanitization (e.g. BuddyPress activity). Private key matching is now limited to the PEM alphabet, and any masking result that would change the HTML markup falls back to masking text and attribute values separately
+* **Security**: Custom pattern replacements can no longer contain < > " ' ` (removed on save and at runtime for existing patterns)
+* **Fixed**: Credit card numbers in text are masked only when they pass the Luhn checksum, so order numbers, JAN codes and other long IDs are no longer masked; fields named as card fields are still masked regardless
+* **Fixed**: BuddyPress activity links were broken for user names that look like hosting IDs (e.g. abc12345); the generated activity action is no longer masked, and activity content is masked once instead of twice
+* **Fixed**: Exact field names now take precedence over partial matches (e.g. remote_addr is treated as an IP address, not a postal address)
+* **Fixed**: Comments created through the REST API (headless front ends, apps, block editor notes) were saved without masking
+* **Fixed**: Edited comments were saved without masking; only changed fields are masked, so moderation never rewrites older text
+* **Fixed**: Removing every consent phrase and saving silently re-enabled the default phrases for real submissions, while the preview showed masking
+* **Fixed**: Consent phrase defaults were different between the settings screen, activation and runtime; they now share one list, and matching is case-insensitive for multibyte text
+* **Fixed**: Adding a consent phrase or custom pattern after removing a row could overwrite another row on save
+* **Fixed**: The error shown for a rejected custom pattern now escapes the pattern
+* Tested up to WordPress 7.1
 
 = 1.6.0 - 2026-07-05 =
 * **New**: Japanese street addresses are now detected and masked in free text (prefecture + municipality + block number required, so mere place mentions are untouched); labeled postal codes (〒 / 郵便番号) are masked too
@@ -212,6 +263,9 @@ Also note that detection is pattern-based and may not catch every piece of perso
 
 == Upgrade Notice ==
 
+= 1.7.0 =
+Security release: fixes a stored XSS in integrations that mask after HTML sanitization (e.g. BuddyPress). REST API comments and comment edits are now masked; block editor notes stay unmasked unless enabled.
+
 = 0.2.0 =
 Initial release of PIIP - PII Protection plugin.
 
@@ -226,6 +280,7 @@ PIIP - PII Protection does NOT:
 PIIP DOES:
 * Process content locally on your server
 * Automatically mask PII without storing sensitive data
+* Optionally anonymize the IP addresses stored with comments
 
 == Support ==
 

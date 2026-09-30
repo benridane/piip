@@ -147,12 +147,11 @@ class PIIP_Admin_Settings {
 
 		wp_enqueue_script( 'jquery' );
 
-		$phrases = get_option( 'piip_settings', array() );
-		$phrases = isset( $phrases['consent_phrases'] ) ? $phrases['consent_phrases'] : array();
-
-		$script = '
+		$script = "
 		jQuery(document).ready(function($) {
-			var phraseIndex = ' . count( $phrases ) . ";
+			// Row indexes only need to be unique (the server re-indexes on save);
+			// a time seed cannot collide with rendered rows even after removals.
+			var phraseIndex = Date.now();
 
 			$('#piip-add-phrase').on('click', function() {
 				var newRow = '<div class=\"piip-phrase-row\" style=\"margin-bottom: 8px; display: flex; align-items: center; gap: 8px;\">' +
@@ -168,7 +167,7 @@ class PIIP_Admin_Settings {
 				$(this).closest('.piip-phrase-row').remove();
 			});
 
-			var patternIndex = $('#piip-custom-patterns .piip-pattern-row').length;
+			var patternIndex = Date.now();
 
 			$('#piip-add-pattern').on('click', function() {
 				var newRow = '<div class=\"piip-pattern-row\" style=\"margin-bottom: 8px; display: flex; align-items: center; gap: 8px;\">' +
@@ -335,7 +334,67 @@ class PIIP_Admin_Settings {
 					'integration' => $integration,
 				)
 			);
+
+			if ( 'comments' === $slug ) {
+				add_settings_field(
+					'comment_types',
+					__( 'Comment types to mask', 'piip-pii-protection' ),
+					array( $this, 'comment_types_field_callback' ),
+					'piip-settings',
+					'piip_wordpress_core_section'
+				);
+			}
 		}
+
+		add_settings_field(
+			'comment_ip',
+			__( 'Commenter IP addresses', 'piip-pii-protection' ),
+			array( $this, 'select_field_callback' ),
+			'piip-settings',
+			'piip_wordpress_core_section',
+			array(
+				'label_for'   => 'comment_ip',
+				'default'     => PIIP_Comment_IP_Anonymizer::MODE_KEEP,
+				'options'     => array(
+					PIIP_Comment_IP_Anonymizer::MODE_KEEP => __( 'Store as is', 'piip-pii-protection' ),
+					PIIP_Comment_IP_Anonymizer::MODE_ANONYMIZE => __( 'Anonymize before saving', 'piip-pii-protection' ),
+				),
+				'description' => __( 'Anonymizing zeroes the last part of the address (e.g. 192.0.2.123 becomes 192.0.2.0), the same way WordPress anonymizes IPs for personal data erasure. Applies to all comment types, including edits. Existing comments are not changed. Flood protection then works per network block instead of per address.', 'piip-pii-protection' ),
+			)
+		);
+	}
+
+	/**
+	 * Comment types field callback.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @return void
+	 */
+	public function comment_types_field_callback() {
+		$options = get_option( 'piip_settings', array() );
+		$labels  = array(
+			'comment' => __( 'Comments', 'piip-pii-protection' ),
+			'review'  => __( 'Product reviews (e.g. WooCommerce)', 'piip-pii-protection' ),
+			'note'    => __( 'Notes (block editor notes, visible to editors only)', 'piip-pii-protection' ),
+			'other'   => __( 'Other types (pingbacks, trackbacks, custom types)', 'piip-pii-protection' ),
+		);
+
+		echo '<fieldset>';
+		foreach ( PIIP_Comments_Integration::COMMENT_TYPE_GROUPS as $group => $default ) {
+			$key     = 'comment_type_' . $group;
+			$enabled = isset( $options[ $key ] ) ? ! empty( $options[ $key ] ) : (bool) $default;
+
+			printf(
+				'<label style="display: block; margin-bottom: 4px;"><input type="checkbox" id="%1$s" name="piip_settings[%1$s]" value="1" %2$s> %3$s</label>',
+				esc_attr( $key ),
+				checked( $enabled, true, false ),
+				esc_html( isset( $labels[ $group ] ) ? $labels[ $group ] : $group )
+			);
+		}
+		echo '</fieldset>';
+
+		echo '<p class="description">' . esc_html__( 'Applies to comments submitted through the comment form, created through the REST API, or edited later. Notes are off by default because they are internal editorial comments.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -387,6 +446,8 @@ class PIIP_Admin_Settings {
 			'hosting'   => __( 'Hosting Account IDs', 'piip-pii-protection' ),
 			'dob'       => __( 'Dates of Birth', 'piip-pii-protection' ),
 			'bank'      => __( 'Bank Account Numbers', 'piip-pii-protection' ),
+			'contact'   => __( 'Labeled contact details (inquiry-style text: name, address, phone, member ID, card expiry/CVV)', 'piip-pii-protection' ),
+			'id_doc'    => __( 'ID document numbers (labeled passport, driver\'s license, insurance, pension, residence card)', 'piip-pii-protection' ),
 			'name_text' => __( 'Names (self-introduction phrases)', 'piip-pii-protection' ),
 		);
 
@@ -627,7 +688,8 @@ class PIIP_Admin_Settings {
 	 */
 	public function select_field_callback( $args ) {
 		$options = get_option( 'piip_settings', array() );
-		$value   = isset( $options[ $args['label_for'] ] ) ? $options[ $args['label_for'] ] : '90';
+		$default = isset( $args['default'] ) ? $args['default'] : '';
+		$value   = isset( $options[ $args['label_for'] ] ) ? $options[ $args['label_for'] ] : $default;
 
 		printf(
 			'<select id="%s" name="piip_settings[%s]">',
@@ -668,28 +730,19 @@ class PIIP_Admin_Settings {
 		// Parameter preserved for interface compatibility.
 		unset( $args ); // Explicitly unset unused parameter.
 		$options = get_option( 'piip_settings', array() );
-		$phrases = isset( $options['consent_phrases'] ) ? $options['consent_phrases'] : array();
 
-		// Default phrases if none set.
-		if ( empty( $phrases ) ) {
-			$phrases = array(
-				array(
-					'phrase'  => 'マスクを外すことに同意',
+		// Show the defaults only while the setting has never been saved; a
+		// saved empty list means the admin removed every phrase.
+		if ( isset( $options['consent_phrases'] ) ) {
+			$phrases = is_array( $options['consent_phrases'] ) ? $options['consent_phrases'] : array();
+		} else {
+			$phrases = array();
+			foreach ( PIIP_PII_Masker::DEFAULT_CONSENT_PHRASES as $default_phrase ) {
+				$phrases[] = array(
+					'phrase'  => $default_phrase,
 					'enabled' => true,
-				),
-				array(
-					'phrase'  => '個人情報の公開に同意します',
-					'enabled' => true,
-				),
-				array(
-					'phrase'  => 'I consent to unmasking',
-					'enabled' => true,
-				),
-				array(
-					'phrase'  => 'I consent to sharing my personal information',
-					'enabled' => true,
-				),
-			);
+				);
+			}
 		}
 
 		echo '<div id="piip-consent-phrases">';
@@ -771,7 +824,7 @@ class PIIP_Admin_Settings {
 			esc_html__( '+ Add Pattern', 'piip-pii-protection' )
 		);
 
-		echo '<p class="description">' . esc_html__( 'Regular expression without delimiters, applied case-sensitively to text content (PCRE, Unicode mode). Invalid expressions are rejected on save. The replacement is inserted literally.', 'piip-pii-protection' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Regular expression without delimiters, applied case-sensitively to text content (PCRE, Unicode mode). Invalid expressions are rejected on save. The replacement is inserted literally; the characters < > " \' ` are removed from it.', 'piip-pii-protection' ) . '</p>';
 	}
 
 	/**
@@ -800,7 +853,13 @@ class PIIP_Admin_Settings {
 			'mask_dob',
 			'mask_bank',
 			'mask_name_text',
+			'mask_contact',
+			'mask_id_doc',
 		);
+
+		foreach ( array_keys( PIIP_Comments_Integration::COMMENT_TYPE_GROUPS ) as $group ) {
+			$checkboxes[] = 'comment_type_' . $group;
+		}
 
 		// Add integration checkboxes.
 		foreach ( array_keys( $this->available_integrations ) as $slug ) {
@@ -811,12 +870,16 @@ class PIIP_Admin_Settings {
 			$sanitized[ $checkbox ] = isset( $input[ $checkbox ] ) ? 1 : 0;
 		}
 
+		$ip_mode                 = isset( $input['comment_ip'] ) ? sanitize_key( $input['comment_ip'] ) : '';
+		$sanitized['comment_ip'] = in_array( $ip_mode, PIIP_Comment_IP_Anonymizer::MODES, true ) ? $ip_mode : PIIP_Comment_IP_Anonymizer::MODE_KEEP;
+
 		// Saving replaces the whole option; keep the schema version.
 		$sanitized['settings_version'] = PIIP_SETTINGS_VERSION;
 
-		// Sanitize consent phrases.
+		// Sanitize consent phrases. Always store the key: removing every row
+		// submits nothing, and a missing key would bring the defaults back.
+		$sanitized['consent_phrases'] = array();
 		if ( isset( $input['consent_phrases'] ) && is_array( $input['consent_phrases'] ) ) {
-			$sanitized['consent_phrases'] = array();
 			foreach ( $input['consent_phrases'] as $phrase_data ) {
 				if ( ! empty( $phrase_data['phrase'] ) ) {
 					$sanitized['consent_phrases'][] = array(
@@ -856,7 +919,7 @@ class PIIP_Admin_Settings {
 						sprintf(
 							/* translators: %s: the rejected regular expression. */
 							__( 'A custom pattern was discarded because it is not a valid regular expression: %s', 'piip-pii-protection' ),
-							$pattern
+							esc_html( $pattern )
 						)
 					);
 					continue;
@@ -865,7 +928,8 @@ class PIIP_Admin_Settings {
 				$sanitized['custom_patterns'][] = array(
 					'label'       => isset( $pattern_data['label'] ) ? sanitize_text_field( $pattern_data['label'] ) : '',
 					'pattern'     => $pattern,
-					'replacement' => isset( $pattern_data['replacement'] ) ? sanitize_text_field( $pattern_data['replacement'] ) : '',
+					// Masking may run after HTML sanitization; keep replacements inert.
+					'replacement' => isset( $pattern_data['replacement'] ) ? PIIP_PII_Detector::sanitize_replacement( sanitize_text_field( $pattern_data['replacement'] ) ) : '',
 					'enabled'     => ! empty( $pattern_data['enabled'] ) ? 1 : 0,
 				);
 			}

@@ -43,14 +43,12 @@ class PIIP_BuddyPress_Integration extends PIIP_Base_Integration {
 	 * Initialize hooks for BuddyPress.
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 Activity content is masked once, in bp_activity_before_save
+	 *              (every update and activity comment is saved through it).
 	 *
 	 * @return void
 	 */
 	protected function init_hooks() {
-		// Mask activity content before save.
-		add_filter( 'bp_activity_post_update_content', array( $this, 'mask_activity_content' ), 10, 1 );
-		add_filter( 'bp_activity_new_update_content', array( $this, 'mask_activity_content' ), 10, 1 );
-
 		// Mask activity via action hook (before save, passed by reference).
 		add_action( 'bp_activity_before_save', array( $this, 'mask_activity_before_save' ), 10, 1 );
 
@@ -63,9 +61,6 @@ class PIIP_BuddyPress_Integration extends PIIP_Base_Integration {
 
 		// Mask group descriptions.
 		add_filter( 'groups_group_description_before_save', array( $this, 'mask_group_description' ), 10, 2 );
-
-		// Mask activity comments.
-		add_filter( 'bp_activity_comment_content', array( $this, 'mask_activity_comment' ), 10, 1 );
 	}
 
 	/**
@@ -95,17 +90,16 @@ class PIIP_BuddyPress_Integration extends PIIP_Base_Integration {
 	 * Mask activity object before save (action hook).
 	 *
 	 * @since 1.0.0
+	 * @since 1.7.0 No longer masks the action string: BuddyPress generates it
+	 *              (member links, "posted an update"), and masking it broke
+	 *              profile URLs for user names such as abc12345.
 	 *
 	 * @param BP_Activity_Activity $activity Activity object (passed by reference).
 	 * @return void
 	 */
-	public function mask_activity_before_save( &$activity ) {
+	public function mask_activity_before_save( $activity ) {
 		if ( ! empty( $activity->content ) ) {
 			$activity->content = $this->mask_content( $activity->content, 'activity_content', $activity->id );
-		}
-
-		if ( ! empty( $activity->action ) ) {
-			$activity->action = $this->mask_content( $activity->action, 'activity_action', $activity->id );
 		}
 	}
 

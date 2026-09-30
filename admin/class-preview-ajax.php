@@ -148,7 +148,8 @@ class PIIP_Preview_Ajax {
 				// URLs are detected but mask_text() has no URL masking branch.
 				'maskable'   => 'url' !== $item['type'],
 				// Whether this value actually disappeared from the output.
-				'was_masked' => false === strpos( $masked, $item['value'] ),
+				// Detected values are normalized (half-width); compare likewise.
+				'was_masked' => false === strpos( PIIP_PII_Patterns::normalize( $masked ), $item['value'] ),
 			);
 		}
 

@@ -24,6 +24,8 @@ This document provides examples of how to use PIIP's custom hooks for extending 
 16. **`piip_custom_mask_text`** - ✨ **Complete custom override of simple text masking**
 17. **`piip_before_mask_text`** - ✨ **Pre-process text before masking**  
 18. **`piip_after_mask_text`** - ✨ **Post-process text after masking**
+19. **`piip_mask_comment_type`** - Decide per comment type whether a comment is masked (since 1.7.0)
+20. **`piip_text_rules`** - Add or change the free-text rules shared by masking and detection (since 1.7.0)
 
 ### Actions
 
@@ -43,7 +45,54 @@ $masked = piip_mask_text( $text );
 // Result: "Call me at ***-***-5678 or email j***@example.com"
 ```
 
+## Abilities API (since 1.7.0)
+
+PIIP registers two abilities in the `piip` category. Both are safe to expose to AI agents: they never return raw PII.
+
+| Ability | Permission | Input | Output |
+|---|---|---|---|
+| `piip/mask-text` | `edit_posts` | `{ "text": "..." }` (max 10,000 chars) | `masked`, `changed`, `detected_types`, `consent_bypassed`, `masking_enabled` |
+| `piip/scan-content` | `manage_options` | `{ "target": "comments" \| "<post type>", "offset": 0, "limit": 50 }` | `total`, `processed`, `next_offset`, `items[]` (masked labels) |
+
+```php
+$result = wp_get_ability( 'piip/mask-text' )->execute( array( 'text' => 'Mail me: john@example.com' ) );
+// $result['masked'] === 'Mail me: j***@example.com'
+```
+
+Over REST: `POST /wp-json/wp-abilities/v1/abilities/piip/mask-text/run` with `{"input":{"text":"..."}}`, and `GET /wp-json/wp-abilities/v1/abilities/piip/scan-content/run?input[target]=comments`. `mask-text` is deliberately not annotated read-only so that its input travels in a POST body rather than in URLs and access logs.
+
 ## Usage Examples
+
+### 0a. Add a Free-Text Rule (New in v1.7.0)
+
+Rules run in order on normalized text (full-width characters folded to ASCII). The same rule drives masking, the preview, the PII scan and the Abilities API.
+
+```php
+add_filter( 'piip_text_rules', function( $rules ) {
+    // Mask labeled employee IDs: "社員番号：E123456" -> "社員番号：E***".
+    array_unshift( $rules, array(
+        'id'    => 'employee_id',
+        'type'  => 'contact',             // Enabled/disabled with this PII type.
+        'regex' => '/(社員番号[\t ]*:[\t ]*)([A-Z][0-9]{6})/u',
+        'group' => 2,                     // Capture group holding the value.
+        'mask'  => 'mask_account_id',     // A PIIP_PII_Masker method, or 'replace' => '***'.
+    ) );
+    return $rules;
+} );
+```
+
+Optional keys: `validate` (a `PIIP_PII_Patterns` static validator such as `is_card_number`, or any callable), `provider` (label shown in reports).
+
+### 0. Choose Comment Types to Mask (New in v1.7.0)
+
+```php
+// Always mask product reviews, regardless of the settings screen.
+add_filter( 'piip_mask_comment_type', function( $enabled, $comment_type, $commentdata ) {
+    return 'review' === $comment_type ? true : $enabled;
+}, 10, 3 );
+```
+
+`$comment_type` is the raw type (`''` for legacy plain comments). The settings screen groups types into comments, reviews, notes and other.
 
 ### 1. Adding Support for New Community Plugin
 
