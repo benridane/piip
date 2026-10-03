@@ -4,7 +4,7 @@ Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -178,7 +178,7 @@ Also note that detection is pattern-based and may not catch every piece of perso
 
 == Changelog ==
 
-= 1.8.0 =
+= 1.8.0 - 2026-10-03 =
 * **New**: Location and identifying metadata are removed from uploaded images (JPEG, WebP, PNG, HEIC/AVIF): GPS coordinates in EXIF and XMP, XMP location fields, and (optionally) author, owner name and camera/lens serial numbers. Files are edited in place without re-encoding; orientation, color profile, camera model and date are kept. Both options are on by default (Settings → PII Protection → Uploaded Images)
 * **New**: The EXIF author ("credit") is no longer stored in media data exposed by the REST API
 * **New**: "Images" target for the PII scan (Tools → PII Scan, `wp piip scan --target=images`, and the piip/scan-content ability) to find and clean images uploaded earlier
@@ -276,6 +276,9 @@ Also note that detection is pattern-based and may not catch every piece of perso
 * Note: Name masking excluded due to accuracy limitations
 
 == Upgrade Notice ==
+
+= 1.8.0 =
+Uploaded photos lose their GPS location and author/device IDs (on by default, no re-encoding). Use Tools > PII Scan > Images to clean images uploaded earlier.
 
 = 1.7.0 =
 Security release: fixes a stored XSS in integrations that mask after HTML sanitization (e.g. BuddyPress). REST API comments and comment edits are now masked; block editor notes stay unmasked unless enabled.
