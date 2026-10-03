@@ -100,7 +100,7 @@ class PIIP_Scan_Page {
 					'summary'        => __( '%1$s of %2$s scanned items contain PII.', 'piip-pii-protection' ),
 					/* translators: %s: number of masked items. */
 					'applied'        => __( 'Masking applied to %s items.', 'piip-pii-protection' ),
-					'confirmApply'   => __( 'Apply masking to all listed items? Comments are updated in place and cannot be restored. Posts keep a revision where revisions are enabled.', 'piip-pii-protection' ),
+					'confirmApply'   => __( 'Apply masking to all listed items? Comments are updated in place and cannot be restored. Posts keep a revision where revisions are enabled. Image metadata is removed from the files and cannot be restored.', 'piip-pii-protection' ),
 					'statusChange'   => __( 'Will be masked', 'piip-pii-protection' ),
 					'statusNoChange' => __( 'Detected only', 'piip-pii-protection' ),
 					'statusConsent'  => __( 'Consent phrase (skipped)', 'piip-pii-protection' ),
@@ -151,7 +151,7 @@ class PIIP_Scan_Page {
 		$apply  = ! empty( $_POST['apply'] );
 
 		$valid_targets = array_merge(
-			array( 'comments' ),
+			array( 'comments', 'images' ),
 			array_keys( PIIP_Content_Scanner::get_scannable_post_types() )
 		);
 		if ( ! in_array( $target, $valid_targets, true ) ) {
@@ -166,6 +166,9 @@ class PIIP_Scan_Page {
 		if ( 'comments' === $target ) {
 			$total = $this->scanner->count_items( 'comments' );
 			$batch = $this->scanner->scan_comments_batch( $offset, $limit, $apply );
+		} elseif ( 'images' === $target ) {
+			$total = $this->scanner->count_items( 'images' );
+			$batch = $this->scanner->scan_images_batch( $offset, $limit, $apply );
 		} else {
 			$total = $this->scanner->count_items( 'posts', $target );
 			$batch = $this->scanner->scan_posts_batch( $target, $offset, $limit, $apply );

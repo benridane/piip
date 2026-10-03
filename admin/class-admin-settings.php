@@ -261,6 +261,14 @@ class PIIP_Admin_Settings {
 			'piip-settings'
 		);
 
+		// Images section.
+		add_settings_section(
+			'piip_images_section',
+			__( 'Uploaded Images', 'piip-pii-protection' ),
+			array( $this, 'images_section_callback' ),
+			'piip-settings'
+		);
+
 		// Consent phrases section.
 		add_settings_section(
 			'piip_consent_section',
@@ -282,6 +290,7 @@ class PIIP_Admin_Settings {
 		$this->add_wordpress_core_fields();
 		$this->add_integration_fields();
 		$this->add_pii_type_fields();
+		$this->add_image_fields();
 		$this->add_consent_fields();
 		$this->add_custom_pattern_fields();
 	}
@@ -476,6 +485,52 @@ class PIIP_Admin_Settings {
 	 *
 	 * @return void
 	 */
+	/**
+	 * Add image metadata fields.
+	 *
+	 * @since 1.8.0
+	 *
+	 * @return void
+	 */
+	private function add_image_fields() {
+		add_settings_field(
+			'image_strip_location',
+			__( 'Remove location', 'piip-pii-protection' ),
+			array( $this, 'checkbox_field_callback' ),
+			'piip-settings',
+			'piip_images_section',
+			array(
+				'label_for'   => 'image_strip_location',
+				'default'     => 1,
+				'description' => __( 'Remove GPS coordinates (EXIF and XMP) and XMP location fields from uploaded images.', 'piip-pii-protection' ),
+			)
+		);
+
+		add_settings_field(
+			'image_strip_identity',
+			__( 'Remove author and device IDs', 'piip-pii-protection' ),
+			array( $this, 'checkbox_field_callback' ),
+			'piip-settings',
+			'piip_images_section',
+			array(
+				'label_for'   => 'image_strip_identity',
+				'default'     => 1,
+				'description' => __( 'Remove the author, owner name and camera/lens serial numbers, and keep the author out of the media library data that the REST API exposes.', 'piip-pii-protection' ),
+			)
+		);
+	}
+
+	/**
+	 * Images section callback.
+	 *
+	 * @since 1.8.0
+	 *
+	 * @return void
+	 */
+	public function images_section_callback() {
+		echo '<p>' . esc_html__( 'Photos taken with phones usually carry the place they were taken. WordPress keeps the original upload (and, with ImageMagick, every resized copy) with that data intact. PIIP removes it from JPEG, WebP, PNG and HEIC/AVIF files as they are uploaded, without re-encoding the image: orientation, color profile, camera model and date are kept. Existing images can be checked under Tools > PII Scan.', 'piip-pii-protection' ) . '</p>';
+	}
+
 	/**
 	 * Add consent phrase fields.
 	 *
@@ -855,6 +910,8 @@ class PIIP_Admin_Settings {
 			'mask_name_text',
 			'mask_contact',
 			'mask_id_doc',
+			'image_strip_location',
+			'image_strip_identity',
 		);
 
 		foreach ( array_keys( PIIP_Comments_Integration::COMMENT_TYPE_GROUPS ) as $group ) {

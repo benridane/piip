@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define plugin constants.
 define( 'PIIP_VERSION', '1.7.0' );
-define( 'PIIP_SETTINGS_VERSION', 4 );
+define( 'PIIP_SETTINGS_VERSION', 5 );
 define( 'PIIP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PIIP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'PIIP_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -114,6 +114,8 @@ class PIIP_Plugin {
 		require_once PIIP_PLUGIN_DIR . 'includes/class-content-scanner.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-comment-ip-anonymizer.php';
 		require_once PIIP_PLUGIN_DIR . 'includes/class-abilities.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-image-scrubber.php';
+		require_once PIIP_PLUGIN_DIR . 'includes/class-image-privacy.php';
 
 		// Load admin classes.
 		if ( is_admin() ) {
@@ -182,6 +184,25 @@ class PIIP_Plugin {
 		$this->init_integrations();
 
 		$this->init_comment_ip_anonymizer();
+		$this->init_image_privacy();
+	}
+
+	/**
+	 * Start scrubbing uploaded image metadata when enabled.
+	 *
+	 * Like the IP anonymizer, independent of the integrations but off while
+	 * masking is globally disabled.
+	 *
+	 * @since 1.8.0
+	 *
+	 * @return void
+	 */
+	private function init_image_privacy() {
+		$settings = get_option( 'piip_settings', array() );
+
+		if ( ! empty( $settings['enable_masking'] ) && PIIP_Image_Privacy::is_enabled( $settings ) ) {
+			new PIIP_Image_Privacy();
+		}
 	}
 
 	/**
@@ -218,6 +239,7 @@ class PIIP_Plugin {
 	 * @since 1.5.0
 	 * @since 1.6.0 Added the versioned settings upgrade.
 	 * @since 1.7.0 Seeds the comment type and commenter IP settings.
+	 * @since 1.8.0 Seeds the image metadata settings.
 	 *
 	 * @return void
 	 */
@@ -294,6 +316,20 @@ class PIIP_Plugin {
 		if ( $version < 4 ) {
 			// New in 1.7.0: labeled contact details and ID document numbers.
 			foreach ( array( 'mask_contact', 'mask_id_doc' ) as $key ) {
+				if ( ! isset( $settings[ $key ] ) ) {
+					$settings[ $key ] = 1;
+				}
+			}
+
+			$settings['settings_version'] = 4;
+			$version                      = 4;
+			$changed                      = true;
+		}
+
+		if ( $version < 5 ) {
+			// New in 1.8.0: image metadata scrubbing. Only future uploads are
+			// processed automatically, so it is on for upgraders too.
+			foreach ( array( 'image_strip_location', 'image_strip_identity' ) as $key ) {
 				if ( ! isset( $settings[ $key ] ) ) {
 					$settings[ $key ] = 1;
 				}
@@ -429,6 +465,8 @@ class PIIP_Plugin {
 			'mask_name_text'         => 0,
 			'mask_contact'           => 1,
 			'mask_id_doc'            => 1,
+			'image_strip_location'   => 1,
+			'image_strip_identity'   => 1,
 			'integration_comments'   => 1,
 			'integration_wpforo'     => 0,
 			'integration_buddypress' => 0,

@@ -74,6 +74,16 @@ class PIIP_Content_Scanner {
 	 * @return int Total number of items.
 	 */
 	public function count_items( $target, $post_type = '' ) {
+		if ( 'images' === $target ) {
+			$total = 0;
+			foreach ( (array) wp_count_attachments( 'image' ) as $mime => $count ) {
+				if ( 0 === strpos( (string) $mime, 'image/' ) ) {
+					$total += (int) $count;
+				}
+			}
+			return $total;
+		}
+
 		if ( 'comments' === $target ) {
 			return (int) get_comments(
 				array(
@@ -236,6 +246,88 @@ class PIIP_Content_Scanner {
 
 		return array(
 			'processed' => count( $posts ),
+			'items'     => $items,
+		);
+	}
+
+	/**
+	 * Scan (and optionally scrub) one batch of image attachments.
+	 *
+	 * Reports images whose files carry location or identifying metadata
+	 * (original, attached file and every size), plus a stored EXIF author.
+	 *
+	 * @since 1.8.0
+	 *
+	 * @param int  $offset Query offset.
+	 * @param int  $limit  Batch size.
+	 * @param bool $apply  Whether to scrub the files.
+	 * @return array Batch result, same shape as scan_comments_batch().
+	 */
+	public function scan_images_batch( $offset, $limit = self::BATCH_SIZE, $apply = false ) {
+		$attachments = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_mime_type' => 'image',
+				'post_status'    => 'any',
+				'numberposts'    => $limit,
+				'offset'         => $offset,
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
+				'fields'         => 'ids',
+			)
+		);
+
+		$options = PIIP_Image_Privacy::get_options();
+		$items   = array();
+
+		foreach ( $attachments as $attachment_id ) {
+			$report = PIIP_Image_Privacy::inspect_attachment( $attachment_id );
+			$types  = array();
+			if ( $report['location'] ) {
+				$types[] = 'image_location';
+			}
+			if ( $report['identity'] ) {
+				$types[] = 'image_identity';
+			}
+
+			if ( ! $types && ! $report['failed'] ) {
+				continue;
+			}
+
+			$would_change = ( $report['location'] && $options['location'] ) || ( $report['identity'] && $options['identity'] );
+
+			$item = array(
+				'id'               => (int) $attachment_id,
+				'target'           => 'images',
+				'label'            => wp_basename( (string) get_attached_file( $attachment_id ) ),
+				'edit_link'        => get_edit_post_link( $attachment_id, 'raw' ),
+				'detected_types'   => $report['failed'] ? array_merge( $types, array( 'unreadable' ) ) : $types,
+				'would_change'     => $would_change,
+				'consent_bypassed' => false,
+				'applied'          => false,
+			);
+
+			if ( $apply && $would_change ) {
+				$status = PIIP_Image_Privacy::scrub_attachment( $attachment_id, null, 'scan' );
+				if ( $options['identity'] ) {
+					PIIP_Image_Privacy::clear_stored_credit( $attachment_id );
+				}
+				update_post_meta(
+					$attachment_id,
+					PIIP_Image_Privacy::META_KEY,
+					array(
+						'status' => $status,
+						'time'   => time(),
+					)
+				);
+				$item['applied'] = PIIP_Image_Scrubber::STATUS_FAILED !== $status;
+			}
+
+			$items[] = $item;
+		}
+
+		return array(
+			'processed' => count( $attachments ),
 			'items'     => $items,
 		);
 	}

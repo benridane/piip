@@ -574,7 +574,7 @@ class PIIP_PII_Masker {
 	/**
 	 * Mask credit card number.
 	 *
-	 * Example: 4532-1234-5678-9010 -> ****-****-****-9010
+	 * Example: 4532-1234-5678-9014 -> ****-****-****-9014
 	 *
 	 * @since 1.0.0
 	 *

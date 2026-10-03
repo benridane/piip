@@ -22,6 +22,7 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * **Commenter IP Anonymization**: Optionally store commenter IP addresses anonymized (192.0.2.123 → 192.0.2.0), the same way WordPress anonymizes them for personal data erasure
 * **Inquiry-Style Text Protection**: Catches contact details posted to a forum by mistake instead of a contact form - labeled names, furigana, addresses, phone numbers, member/login IDs, card expiry dates and security codes (お名前：… / 住所：… / Name: … / Address: …)
 * **Full-Width Aware**: Full-width digits and symbols typed with a Japanese IME (０９０－１２３４－５６７８, ｔａｒｏ＠ｅｘａｍｐｌｅ．ｊｐ) are detected; text outside masked parts keeps its original width
+* **Image Location Removal**: GPS coordinates and author/device identifiers are removed from uploaded photos (JPEG, WebP, PNG, HEIC/AVIF) without re-encoding - WordPress otherwise keeps them in the original upload and, with ImageMagick, in every resized copy
 * **Abilities API**: `piip/mask-text` and `piip/scan-content` abilities let MCP clients and AI agents mask text and audit stored content without ever receiving raw PII
 * **Community Plugin Support**: Works seamlessly with wpForo, BuddyPress, bbPress, and other popular community plugins
 * **Configurable**: Choose which PII types to mask via easy-to-use settings page
@@ -36,7 +37,7 @@ PIIP (PII Protection) is a plugin that automatically detects and masks personall
 * Email addresses (example@domain.com → e***@domain.com)
 * Phone numbers (Japanese mobile/landline, parenthesized 03(1234)5678, toll-free/navi dial 0120/0570, international, US formats)
 * Japanese street addresses in free text (東京都新宿区西新宿2-8-1 → 東京都***) and labeled postal codes (〒123-4567 → 〒***-****)
-* Credit card numbers with Luhn validation (4532-1234-5678-9010 → ****-****-****-9010)
+* Credit card numbers with Luhn validation (4532-1234-5678-9014 → ****-****-****-9014)
 * Social Security Numbers / Japanese My Number with check digit validation
 * Passwords, including labeled values in free text (password: xxx / パスワードは xxx / PW: xxx → [REDACTED]) and pasted configuration (define( 'DB_PASSWORD', '…' ), SMTP_PASSWORD=…, aws_secret_access_key = …)
 * HTTP credentials: Basic auth (curl -u, Authorization: Basic, user:pass@host URLs) and Bearer tokens (including JWTs)
@@ -115,6 +116,12 @@ Yes! PIIP has native support for WordPress core comments. Simply enable the Comm
 
 Comments are masked whether they are submitted through the comment form, created through the REST API (for example by headless front ends or apps), or edited later. You can choose which comment types are masked: regular comments, product reviews (e.g. WooCommerce), block editor notes (off by default, as they are internal editorial comments), and other types such as pingbacks.
 
+= Does PIIP remove the location from uploaded photos? =
+
+Yes. Photos taken with phones usually record where they were taken. WordPress keeps the original upload unchanged and publicly reachable, and on servers using ImageMagick every resized copy (including thumbnails) keeps the location too. With "Remove location" enabled (the default), PIIP removes GPS coordinates (EXIF and XMP) and XMP location fields from JPEG, WebP, PNG and HEIC/AVIF files as they are uploaded through WordPress, before thumbnails are created. "Remove author and device IDs" also removes the author, owner name and camera/lens serial numbers, and keeps the author out of the media data the REST API returns.
+
+The image itself is not re-encoded: only the metadata bytes are overwritten, so quality, orientation, color profile, camera model and date are preserved. Existing images can be checked and cleaned under Tools > PII Scan (target "Images") or with `wp piip scan --target=images --apply`. Files uploaded by plugins that bypass the WordPress upload functions (for example Contact Form 7 attachments) are not covered, and what is visible in the picture itself is of course not changed.
+
 = Can PIIP anonymize commenter IP addresses? =
 
 Yes. Set "Commenter IP addresses" to "Anonymize before saving" in Settings → PII Protection. The last part of the address is zeroed (192.0.2.123 becomes 192.0.2.0; IPv6 keeps the first 48 bits) for new and edited comments. Existing comments are not changed. Because the address is anonymized rather than removed, WordPress flood protection keeps working, per network block instead of per address.
@@ -170,6 +177,13 @@ Also note that detection is pattern-based and may not catch every piece of perso
 3. Example of masked content in forum post
 
 == Changelog ==
+
+= 1.8.0 =
+* **New**: Location and identifying metadata are removed from uploaded images (JPEG, WebP, PNG, HEIC/AVIF): GPS coordinates in EXIF and XMP, XMP location fields, and (optionally) author, owner name and camera/lens serial numbers. Files are edited in place without re-encoding; orientation, color profile, camera model and date are kept. Both options are on by default (Settings → PII Protection → Uploaded Images)
+* **New**: The EXIF author ("credit") is no longer stored in media data exposed by the REST API
+* **New**: "Images" target for the PII scan (Tools → PII Scan, `wp piip scan --target=images`, and the piip/scan-content ability) to find and clean images uploaded earlier
+* **New**: `piip_scrub_image`, `piip_image_scrubbed` and `piip_image_scrub_max_size` hooks
+* **Fixed**: The card number example in the readme was not a valid (Luhn) number
 
 = 1.7.0 - 2026-09-28 =
 * **New**: Choose which comment types are masked - comments, product reviews, block editor notes, and other types (pingbacks, trackbacks, custom types). Notes are off by default
