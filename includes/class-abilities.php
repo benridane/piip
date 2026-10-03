@@ -166,7 +166,7 @@ class PIIP_Abilities {
 					'properties'           => array(
 						'target' => array(
 							'type'        => 'string',
-							'description' => __( '"comments", or a public post type such as "post" or "page".', 'piip-pii-protection' ),
+							'description' => __( '"comments", "images" (location and author/device metadata in uploaded image files), or a public post type such as "post" or "page".', 'piip-pii-protection' ),
 							'default'     => 'comments',
 						),
 						'offset' => array(
@@ -324,6 +324,9 @@ class PIIP_Abilities {
 		if ( 'comments' === $target ) {
 			$total = $plugin->scanner->count_items( 'comments' );
 			$batch = $plugin->scanner->scan_comments_batch( $offset, $limit, false );
+		} elseif ( 'images' === $target ) {
+			$total = $plugin->scanner->count_items( 'images' );
+			$batch = $plugin->scanner->scan_images_batch( $offset, $limit, false );
 		} elseif ( array_key_exists( $target, PIIP_Content_Scanner::get_scannable_post_types() ) ) {
 			$total = $plugin->scanner->count_items( 'posts', $target );
 			$batch = $plugin->scanner->scan_posts_batch( $target, $offset, $limit, false );
@@ -331,7 +334,7 @@ class PIIP_Abilities {
 			return new WP_Error(
 				'piip_invalid_target',
 				/* translators: %s: comma-separated list of valid targets. */
-				sprintf( __( 'Invalid target. Use one of: %s', 'piip-pii-protection' ), implode( ', ', array_merge( array( 'comments' ), array_keys( PIIP_Content_Scanner::get_scannable_post_types() ) ) ) )
+				sprintf( __( 'Invalid target. Use one of: %s', 'piip-pii-protection' ), implode( ', ', array_merge( array( 'comments', 'images' ), array_keys( PIIP_Content_Scanner::get_scannable_post_types() ) ) ) )
 			);
 		}
 

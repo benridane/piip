@@ -40,6 +40,10 @@ $piip_masking_enabled = ! empty( $piip_settings['enable_masking'] );
 			<input type="checkbox" name="piip-scan-target" value="comments" checked>
 			<?php esc_html_e( 'Comments', 'piip-pii-protection' ); ?>
 		</label>
+		<label style="display: block; margin-bottom: 4px;">
+			<input type="checkbox" name="piip-scan-target" value="images">
+			<?php esc_html_e( 'Images (location and author/device metadata in the files)', 'piip-pii-protection' ); ?>
+		</label>
 		<?php foreach ( $post_types as $piip_post_type => $piip_label ) : ?>
 			<label style="display: block; margin-bottom: 4px;">
 				<input type="checkbox" name="piip-scan-target" value="<?php echo esc_attr( $piip_post_type ); ?>">

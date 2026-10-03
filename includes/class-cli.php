@@ -81,7 +81,8 @@ class PIIP_CLI {
 	 * ## OPTIONS
 	 *
 	 * [--target=<targets>]
-	 * : Comma-separated list of what to scan: "comments", any public post
+	 * : Comma-separated list of what to scan: "comments", "images" (location
+	 * and author/device metadata in uploaded image files), any public post
 	 * type name, or "all".
 	 * ---
 	 * default: comments
@@ -115,6 +116,9 @@ class PIIP_CLI {
 	 *     # Scan posts and pages only.
 	 *     wp piip scan --target=post,page
 	 *
+	 *     # Find uploaded images that still carry GPS or author/device metadata.
+	 *     wp piip scan --target=images
+	 *
 	 * @since 1.5.0
 	 *
 	 * @param array $args       Positional arguments.
@@ -137,11 +141,11 @@ class PIIP_CLI {
 		$requested  = isset( $assoc_args['target'] ) ? (string) $assoc_args['target'] : 'comments';
 
 		if ( 'all' === $requested ) {
-			$targets = array_merge( array( 'comments' ), array_keys( $post_types ) );
+			$targets = array_merge( array( 'comments', 'images' ), array_keys( $post_types ) );
 		} else {
 			$targets = array_filter( array_map( 'trim', explode( ',', $requested ) ) );
 			foreach ( $targets as $target ) {
-				if ( 'comments' !== $target && ! isset( $post_types[ $target ] ) ) {
+				if ( 'comments' !== $target && 'images' !== $target && ! isset( $post_types[ $target ] ) ) {
 					WP_CLI::error( sprintf( 'Unknown scan target: %s', $target ) );
 				}
 			}
@@ -149,7 +153,7 @@ class PIIP_CLI {
 
 		if ( $apply ) {
 			WP_CLI::confirm(
-				'Apply masking to all items containing PII? Comments cannot be restored.',
+				'Apply masking to all items containing PII? Comments and image metadata cannot be restored.',
 				$assoc_args
 			);
 		}
@@ -164,6 +168,8 @@ class PIIP_CLI {
 			do {
 				if ( 'comments' === $target ) {
 					$batch = $scanner->scan_comments_batch( $offset, PIIP_Content_Scanner::BATCH_SIZE, $apply );
+				} elseif ( 'images' === $target ) {
+					$batch = $scanner->scan_images_batch( $offset, PIIP_Content_Scanner::BATCH_SIZE, $apply );
 				} else {
 					$batch = $scanner->scan_posts_batch( $target, $offset, PIIP_Content_Scanner::BATCH_SIZE, $apply );
 				}

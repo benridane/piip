@@ -26,6 +26,8 @@ This document provides examples of how to use PIIP's custom hooks for extending 
 18. **`piip_after_mask_text`** - ✨ **Post-process text after masking**
 19. **`piip_mask_comment_type`** - Decide per comment type whether a comment is masked (since 1.7.0)
 20. **`piip_text_rules`** - Add or change the free-text rules shared by masking and detection (since 1.7.0)
+21. **`piip_scrub_image`** - Decide per file whether image metadata is removed (since 1.8.0)
+22. **`piip_image_scrub_max_size`** - Largest image file processed, in bytes (default 100 MB, since 1.8.0)
 
 ### Actions
 
@@ -33,6 +35,7 @@ This document provides examples of how to use PIIP's custom hooks for extending 
 2. **`piip_consent_bypass`** - Fired when user consent bypasses masking
 3. **`piip_form_data_masked`** - Fired after form data masking
 4. **`piip_text_masked`** - ✨ **Fired after simple text masking**
+5. **`piip_image_scrubbed`** - Fired after an image file was processed (since 1.8.0)
 
 ## Global Functions
 
@@ -62,6 +65,28 @@ $result = wp_get_ability( 'piip/mask-text' )->execute( array( 'text' => 'Mail me
 Over REST: `POST /wp-json/wp-abilities/v1/abilities/piip/mask-text/run` with `{"input":{"text":"..."}}`, and `GET /wp-json/wp-abilities/v1/abilities/piip/scan-content/run?input[target]=comments`. `mask-text` is deliberately not annotated read-only so that its input travels in a POST body rather than in URLs and access logs.
 
 ## Usage Examples
+
+### 0b. Image Metadata Removal (New in v1.8.0)
+
+```php
+// Keep metadata in a photographer's portfolio uploads.
+add_filter( 'piip_scrub_image', function( $scrub, $file, $context ) {
+    return false !== strpos( $file, '/portfolio/' ) ? false : $scrub;
+}, 10, 3 );
+
+// Log failures (unreadable files are left unchanged).
+add_action( 'piip_image_scrubbed', function( $result, $file, $context ) {
+    if ( 'failed' === $result['status'] ) {
+        error_log( "PIIP could not process {$file}: {$result['error']}" );
+    }
+}, 10, 3 );
+
+// Inspect a file without changing it.
+$result = PIIP_Image_Scrubber::scrub_file( $path, array( 'dry_run' => true ) );
+// $result['found'] === array( 'location' => true, 'identity' => false )
+```
+
+`$context` is `upload`, `sideload`, `metadata` (thumbnail generation) or `scan`.
 
 ### 0a. Add a Free-Text Rule (New in v1.7.0)
 
