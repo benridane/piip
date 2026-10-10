@@ -1,5 +1,5 @@
 === PIIP - PII Protection ===
-Contributors: benridane
+Contributors: benridane, presents111
 Tags: privacy, pii, gdpr, security, data-protection
 Requires at least: 6.9
 Tested up to: 7.1
